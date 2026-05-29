@@ -1,0 +1,11 @@
+# Normaliza fim de linha: tudo como LF no repositório (evita churn no Windows
+# e garante que scripts shell/Dockerfile rodem no container Linux).
+* text=auto eol=lf
+
+# Binários: nunca aplicar conversão de EOL.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pfx binary

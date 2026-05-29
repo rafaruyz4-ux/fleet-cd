@@ -1,0 +1,23 @@
+# Contexto de build da imagem da API. Mantém só o necessário e evita vazar
+# segredos (.env) ou inflar o contexto (node_modules, frontend, etc.).
+node_modules
+dist
+frontend
+test
+samples
+scripts
+
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+
+Dockerfile
+.dockerignore
+docker-compose*.yml
+README.md
+**/*.md
+.vscode
+.idea

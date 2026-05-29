@@ -1,0 +1,25 @@
+node_modules/
+dist/
+*.log
+npm-debug.log*
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Certificado digital A1 (NUNCA versionar)
+*.pfx
+*.p12
+certs/
+
+# Dados locais / armazenamento de XMLs
+storage/
+tmp/
+
+# Editores / SO
+.DS_Store
+.idea/
+.vscode/
+*.swp

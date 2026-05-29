@@ -1,0 +1,302 @@
+### Exemplos de requisições (use com a extensão REST Client do VS Code)
+@host = http://localhost:3000
+@token = COLE_O_accessToken_AQUI
+
+### Healthcheck
+GET {{host}}/health
+
+### Login (use o e-mail/senha do seed)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@cd.local",
+  "senha": "trocar-senha-123"
+}
+
+### Perfil do usuário autenticado
+GET {{host}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### Login do MOTORISTA (CPF + senha — app). Aceita CPF com ou sem pontuação.
+# A senha é definida pelo gestor ao criar/editar o motorista (campo "senha").
+POST {{host}}/api/auth/motorista/login
+Content-Type: application/json
+
+{
+  "cpf": "529.982.247-25",
+  "senha": "app-senha-123"
+}
+
+@motoristaToken = COLE_O_accessToken_DO_MOTORISTA_AQUI
+
+### Perfil do motorista autenticado
+GET {{host}}/api/auth/motorista/me
+Authorization: Bearer {{motoristaToken}}
+
+### Refresh (funciona para gestor OU motorista, conforme o tipo do refresh token)
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "COLE_O_refreshToken_AQUI" }
+
+### Criar motorista
+POST {{host}}/api/motoristas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nome": "João da Silva",
+  "cpf": "123.456.789-00",
+  "cnh": "01234567890",
+  "categoria_cnh": "D",
+  "validade_cnh": "2028-05-01",
+  "telefone": "(11) 99999-0000",
+  "senha": "senha-do-app-123"
+}
+
+### Listar motoristas
+GET {{host}}/api/motoristas
+Authorization: Bearer {{token}}
+
+### Criar veículo
+POST {{host}}/api/veiculos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "placa": "ABC1D23",
+  "modelo": "Mercedes Accelo 1016",
+  "tipo": "caminhao",
+  "capacidade_kg": 5000,
+  "renavam": "12345678901"
+}
+
+### Criar unidade própria (com coordenada)
+POST {{host}}/api/unidades
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nome": "Unidade Matriz",
+  "cnpj": "12.345.678/0001-99",
+  "endereco": "Av. Exemplo, 1000 - São Paulo/SP",
+  "coordenada": { "lat": -23.55052, "lng": -46.63331 },
+  "janela_recebimento": { "seg": ["08:00", "17:00"], "sab": ["08:00", "12:00"] }
+}
+
+### Listar unidades
+GET {{host}}/api/unidades
+Authorization: Bearer {{token}}
+
+### Criar NF (com itens e coordenada de entrega)
+POST {{host}}/api/nfs
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "chave_acesso": "35200114200166000187550010000000031000000031",
+  "numero": "3",
+  "serie": "1",
+  "cfop": "5102",
+  "emitida_em": "2026-05-20T10:30:00Z",
+  "destinatario_cnpj": "98.765.432/0001-10",
+  "destinatario_nome": "Bar do Zé Ltda",
+  "destinatario_endereco": "Rua das Flores, 50 - São Paulo/SP",
+  "coordenada": { "lat": -23.561, "lng": -46.656 },
+  "valor_total": 1250.90,
+  "peso_kg": 80.5,
+  "itens": [
+    { "codigo": "CERV600", "descricao": "Cerveja 600ml cx", "quantidade": 20, "unidade": "CX", "valor_unitario": 45.0 },
+    { "codigo": "REFRI2L", "descricao": "Refrigerante 2L cx", "quantidade": 10, "unidade": "CX", "valor_unitario": 35.09 }
+  ]
+}
+
+### Listar NFs (filtros opcionais: status, de, ate, destinatario_cnpj, unidade_propria_id, busca, limit, offset)
+GET {{host}}/api/nfs?status=importada&limit=20&offset=0
+Authorization: Bearer {{token}}
+
+### Detalhar NF (inclui itens)
+GET {{host}}/api/nfs/COLE_O_ID_DA_NF
+Authorization: Bearer {{token}}
+
+### Atualizar status da NF (e, opcionalmente, substituir itens por completo)
+PATCH {{host}}/api/nfs/COLE_O_ID_DA_NF
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "alocada",
+  "unidade_propria_id": "COLE_O_ID_DA_UNIDADE"
+}
+
+### Remover NF (hard delete — remove os itens em cascata)
+DELETE {{host}}/api/nfs/COLE_O_ID_DA_NF
+Authorization: Bearer {{token}}
+
+### Criar viagem (veículo + motorista, alocando NFs como paradas em ordem)
+POST {{host}}/api/viagens
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "veiculo_id": "COLE_O_ID_DO_VEICULO",
+  "motorista_id": "COLE_O_ID_DO_MOTORISTA",
+  "km_inicial": 1000,
+  "nf_ids": ["COLE_O_ID_DA_NF1", "COLE_O_ID_DA_NF2"]
+}
+
+### Listar viagens (filtros: status, veiculo_id, motorista_id, de, ate, limit, offset)
+GET {{host}}/api/viagens?status=em_andamento&limit=20
+Authorization: Bearer {{token}}
+
+### Detalhar viagem (inclui veículo, motorista e paradas)
+GET {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM
+Authorization: Bearer {{token}}
+
+### Iniciar viagem (marca iniciada_em e km_inicial; NFs viram em_viagem)
+POST {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/iniciar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "km_inicial": 1000 }
+
+### Adicionar uma parada (NF) à viagem em andamento
+POST {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/paradas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nf_id": "COLE_O_ID_DA_NF", "chegada_prevista": "2026-05-28T15:00:00Z" }
+
+### Marcar parada como entregue (NF vira entregue; chegada_real preenchida)
+PATCH {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/paradas/COLE_O_ID_DA_PARADA
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "status": "entregue" }
+
+### Remover parada (NF não entregue volta a importada)
+DELETE {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/paradas/COLE_O_ID_DA_PARADA
+Authorization: Bearer {{token}}
+
+### Encerrar viagem (valida km_final >= km_inicial)
+POST {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/encerrar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "km_final": 1200 }
+
+### Cancelar viagem (NFs não entregues voltam a importada)
+POST {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/cancelar
+Authorization: Bearer {{token}}
+
+# ===== Telemetria (Sprint 5) =====
+
+### Criar rota planejada (linha = sequência de pontos; tolerância em metros)
+POST {{host}}/api/rotas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tipo": "fixa",
+  "nome": "Rota Centro",
+  "raio_tolerancia_m": 200,
+  "linha": [
+    { "lat": -23.560, "lng": -46.650 },
+    { "lat": -23.560, "lng": -46.640 }
+  ]
+}
+
+### (App) Viagens do motorista autenticado
+GET {{host}}/api/app/viagens
+Authorization: Bearer {{motoristaToken}}
+
+### (App) Enviar posições GPS em lote (dispara detecção de alertas)
+POST {{host}}/api/app/viagens/COLE_O_ID_DA_VIAGEM/posicoes
+Authorization: Bearer {{motoristaToken}}
+Content-Type: application/json
+
+{
+  "posicoes": [
+    { "lat": -23.560, "lng": -46.649, "velocidade_kmh": 40, "registrado_em": "2026-05-28T12:00:00Z" },
+    { "lat": -23.560, "lng": -46.647, "velocidade_kmh": 130, "registrado_em": "2026-05-28T12:04:00Z" }
+  ]
+}
+
+### (Dashboard) Trajeto da viagem
+GET {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/posicoes
+Authorization: Bearer {{token}}
+
+### (Dashboard) Alertas de uma viagem
+GET {{host}}/api/viagens/COLE_O_ID_DA_VIAGEM/alertas
+Authorization: Bearer {{token}}
+
+### (Dashboard) Feed de alertas (filtros: visualizado, tipo, viagem_id, limit, offset)
+GET {{host}}/api/alertas?visualizado=false&limit=20
+Authorization: Bearer {{token}}
+
+### (Dashboard) Marcar alerta como visualizado
+PATCH {{host}}/api/alertas/COLE_O_ID_DO_ALERTA
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "visualizado": true }
+
+# ===== Multas (Sprint 6) =====
+
+### Criar multa (por placa; com ocorrida_em o vínculo automático é tentado)
+POST {{host}}/api/multas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "numero_auto": "AUTO-0001",
+  "placa": "FLT0A01",
+  "ocorrida_em": "2026-05-28T10:00:00Z",
+  "tipo": "Excesso de velocidade",
+  "valor": 195.23,
+  "pontos_cnh": 5,
+  "fonte": "manual"
+}
+
+### Listar multas (filtros: status_pagamento, status_revisao, fonte, veiculo_id, motorista_id, de, ate, busca)
+GET {{host}}/api/multas?status_revisao=aguardando_revisao&limit=20
+Authorization: Bearer {{token}}
+
+### Detalhar multa
+GET {{host}}/api/multas/COLE_O_ID_DA_MULTA
+Authorization: Bearer {{token}}
+
+### Atualizar multa (revisão manual / status de pagamento)
+PATCH {{host}}/api/multas/COLE_O_ID_DA_MULTA
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "status_pagamento": "pago", "status_revisao": "revisada" }
+
+### Re-rodar o vínculo automático (ex.: viagem cadastrada após a multa)
+POST {{host}}/api/multas/COLE_O_ID_DA_MULTA/revincular
+Authorization: Bearer {{token}}
+
+### Remover multa
+DELETE {{host}}/api/multas/COLE_O_ID_DA_MULTA
+Authorization: Bearer {{token}}
+
+# ===== Integração NF-e (Sprint 7) =====
+
+### Importar NF-e a partir do XML (cole o conteúdo do XML no campo "xml")
+# Dica: veja samples/nfe-exemplo.xml. O XML precisa vir escapado como string JSON.
+POST {{host}}/api/nfs/importar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "xml": "<?xml version=\"1.0\"?><nfeProc xmlns=\"http://www.portalfiscal.inf.br/nfe\"><NFe><infNFe Id=\"NFe35260512345678000199550010000000451000000453\"><ide><nNF>45</nNF><serie>1</serie><dhEmi>2026-05-20T10:30:00-03:00</dhEmi></ide><dest><CNPJ>98765432000110</CNPJ><xNome>Bar do Ze Ltda</xNome></dest><det><prod><cProd>CERV600</cProd><xProd>Cerveja 600ml</xProd><CFOP>5102</CFOP><uCom>CX</uCom><qCom>20</qCom><vUnCom>45.00</vUnCom></prod></det><total><ICMSTot><vNF>900.00</vNF></ICMSTot></total></infNFe></NFe></nfeProc>"
+}
+
+### Consultar NF-e na SEFAZ por chave (501 enquanto o certificado A1 não é configurado)
+POST {{host}}/api/nfs/sefaz
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "chave_acesso": "35260512345678000199550010000000451000000453" }

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe Id="NFe35260512345678000199550010000000451000000453" versao="4.00">
+      <ide>
+        <cUF>35</cUF>
+        <nNF>45</nNF>
+        <serie>1</serie>
+        <dhEmi>2026-05-20T10:30:00-03:00</dhEmi>
+      </ide>
+      <emit>
+        <CNPJ>12345678000199</CNPJ>
+        <xNome>Distribuidora Origem LTDA</xNome>
+      </emit>
+      <dest>
+        <CNPJ>98765432000110</CNPJ>
+        <xNome>Bar do Ze Ltda</xNome>
+        <enderDest>
+          <xLgr>Rua das Flores</xLgr>
+          <nro>50</nro>
+          <xBairro>Centro</xBairro>
+          <xMun>Sao Paulo</xMun>
+          <UF>SP</UF>
+          <CEP>01001000</CEP>
+        </enderDest>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>CERV600</cProd>
+          <xProd>Cerveja 600ml caixa</xProd>
+          <CFOP>5102</CFOP>
+          <uCom>CX</uCom>
+          <qCom>20.0000</qCom>
+          <vUnCom>45.0000</vUnCom>
+        </prod>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>REFRI2L</cProd>
+          <xProd>Refrigerante 2L caixa</xProd>
+          <CFOP>5102</CFOP>
+          <uCom>CX</uCom>
+          <qCom>10.0000</qCom>
+          <vUnCom>35.0900</vUnCom>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vNF>1250.90</vNF>
+        </ICMSTot>
+      </total>
+      <transp>
+        <vol>
+          <pesoL>80.500</pesoL>
+        </vol>
+      </transp>
+    </infNFe>
+  </NFe>
+</nfeProc>

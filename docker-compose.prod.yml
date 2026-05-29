@@ -1,0 +1,71 @@
+# Stack de produção: Postgres(PostGIS) + Redis + API + Web(Nginx).
+# Subir:  docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# A API aplica migrations + seed do admin no start (entrypoint).
+# Só o serviço web publica porta no host; o resto fica na rede interna.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fleet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-fleet_cd}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleet} -d ${POSTGRES_DB:-fleet_cd}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fleet}:${POSTGRES_PASSWORD:-fleet}@postgres:5432/${POSTGRES_DB:-fleet_cd}
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?defina JWT_ACCESS_SECRET no .env.prod}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?defina JWT_REFRESH_SECRET no .env.prod}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      WORKER_SEM_GPS_ENABLED: ${WORKER_SEM_GPS_ENABLED:-true}
+      SEED_ADMIN_NOME: ${SEED_ADMIN_NOME:-Administrador}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@cd.local}
+      SEED_ADMIN_SENHA: ${SEED_ADMIN_SENHA:?defina SEED_ADMIN_SENHA no .env.prod}
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,32 @@
+services:
+  postgres:
+    # Imagem oficial PostGIS (Postgres 16 + extensão PostGIS já incluída)
+    image: postgis/postgis:16-3.4
+    container_name: fleet_cd_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fleet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleet}
+      POSTGRES_DB: ${POSTGRES_DB:-fleet_cd}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleet} -d ${POSTGRES_DB:-fleet_cd}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: fleet_cd_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

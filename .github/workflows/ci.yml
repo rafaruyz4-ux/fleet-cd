@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ---------------------------------------------------------------
+  # Backend: typecheck, build e suíte de integração (Vitest) contra
+  # um Postgres(PostGIS) + Redis reais, como serviços do job.
+  # ---------------------------------------------------------------
+  backend:
+    name: Backend (typecheck + testes)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: fleet
+          POSTGRES_PASSWORD: fleet
+          POSTGRES_DB: fleet_cd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fleet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build (tsc)
+        run: npm run build
+      - name: Testes (Vitest + supertest)
+        run: npm test
+
+  # ---------------------------------------------------------------
+  # Frontend: lint + build de produção (tsc -b && vite build).
+  # ---------------------------------------------------------------
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build (Vite)
+        run: npm run build
+
+  # ---------------------------------------------------------------
+  # Valida que as duas imagens Docker buildam (sem publicar).
+  # ---------------------------------------------------------------
+  docker:
+    name: Docker build (api + web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build imagem da API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: fleet-cd-api:ci
+      - name: Build imagem do Web
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: fleet-cd-web:ci
