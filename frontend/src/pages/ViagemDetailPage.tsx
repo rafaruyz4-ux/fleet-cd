@@ -136,11 +136,6 @@ export function ViagemDetailPage() {
                   alertas={alertas}
                 />
               </Suspense>
-              {(trajetoria?.total ?? 0) === 0 && (
-                <p className="px-4 py-3 text-sm text-muted-foreground">
-                  Nenhuma posição GPS registrada para esta viagem ainda.
-                </p>
-              )}
             </CardContent>
           </Card>
         </div>

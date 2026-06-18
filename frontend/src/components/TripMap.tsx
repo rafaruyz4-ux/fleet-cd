@@ -64,6 +64,7 @@ export function TripMap({ pontos, rota, alertas, className }: TripMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null)
   const loadedRef = useRef(false)
   const markersRef = useRef<maplibregl.Marker[]>([])
+  const resizeObsRef = useRef<ResizeObserver | null>(null)
 
   // Inicializa o mapa uma única vez.
   useEffect(() => {
@@ -76,6 +77,12 @@ export function TripMap({ pontos, rota, alertas, className }: TripMapProps) {
       attributionControl: { compact: true },
     })
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+
+    // Garante que o mapa redesenhe quando o container ganha/altera tamanho
+    // (carregamento lazy/Suspense pode mediro container só depois do init → mapa em branco).
+    const obs = new ResizeObserver(() => map.resize())
+    obs.observe(containerRef.current)
+    resizeObsRef.current = obs
     map.on('load', () => {
       // lineMetrics: habilita o gradiente ao longo do trajeto.
       map.addSource('trajeto', { type: 'geojson', data: lineFC([]), lineMetrics: true })
@@ -128,6 +135,8 @@ export function TripMap({ pontos, rota, alertas, className }: TripMapProps) {
     })
     mapRef.current = map
     return () => {
+      resizeObsRef.current?.disconnect()
+      resizeObsRef.current = null
       map.remove()
       mapRef.current = null
       loadedRef.current = false
@@ -193,9 +202,19 @@ export function TripMap({ pontos, rota, alertas, className }: TripMapProps) {
     else map.once('fleet:ready', render)
   }, [pontos, rota, alertas])
 
+  const semTrajeto = pontos.length === 0
+
   return (
     <div className={cn('relative overflow-hidden', className)}>
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="h-full w-full" />
+      {/* O mapa sempre aparece; sem GPS, mostramos um aviso POR CIMA dele. */}
+      {semTrajeto && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
+          <div className="rounded-full border border-black/5 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-md backdrop-blur">
+            Sem trajeto GPS ainda — aparece aqui quando o motorista enviar a localização.
+          </div>
+        </div>
+      )}
       <MapaLegenda />
     </div>
   )
