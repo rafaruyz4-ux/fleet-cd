@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth'
 import { PageLoader } from '@/components/ui/spinner'
 import { AppLayout } from '@/components/AppLayout'
 import { LoginPage } from '@/pages/LoginPage'
+import { SignupPage } from '@/pages/SignupPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ViagensPage } from '@/pages/ViagensPage'
 import { ViagemDetailPage } from '@/pages/ViagemDetailPage'
@@ -27,6 +28,12 @@ export function App() {
         path="/login"
         element={
           loading ? <PageLoader /> : usuario ? <Navigate to="/" replace /> : <LoginPage />
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          loading ? <PageLoader /> : usuario ? <Navigate to="/" replace /> : <SignupPage />
         }
       />
       <Route

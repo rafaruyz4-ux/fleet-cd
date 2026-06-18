@@ -8,7 +8,16 @@ interface AuthContextValue {
   /** true enquanto valida a sessão existente no carregamento inicial. */
   loading: boolean
   login: (email: string, senha: string) => Promise<void>
+  signup: (input: SignupInput) => Promise<void>
   logout: () => void
+}
+
+export interface SignupInput {
+  empresaNome: string
+  cnpj?: string
+  nome: string
+  email: string
+  senha: string
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -45,13 +54,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsuario(result.usuario)
   }
 
+  async function signup(input: SignupInput) {
+    const result = await api.post<AuthResult>('/auth/signup', input, { skipAuthRetry: true })
+    tokenStore.set(result.accessToken, result.refreshToken)
+    setUsuario(result.usuario)
+  }
+
   function logout() {
     tokenStore.clear()
     setUsuario(null)
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, login, logout }}>
+    <AuthContext.Provider value={{ usuario, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   )
