@@ -11,6 +11,7 @@ export interface UsuarioTokenPayload {
   empresaId: string; // tenant: empresa à qual o usuário pertence
   email: string;
   papel: Papel;
+  superAdmin: boolean; // equipe da plataforma (backoffice: cria/lista empresas)
 }
 
 // Motorista autenticado no app (CPF + senha).

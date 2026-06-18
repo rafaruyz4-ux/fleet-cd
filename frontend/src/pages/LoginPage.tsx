@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Truck } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
@@ -78,12 +77,6 @@ export function LoginPage() {
               {enviando && <Spinner />}
               Entrar
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              Ainda não tem conta?{' '}
-              <Link to="/signup" className="font-medium text-primary hover:underline">
-                Criar conta da empresa
-              </Link>
-            </p>
           </form>
         </CardContent>
       </Card>

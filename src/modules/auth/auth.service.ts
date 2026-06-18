@@ -1,8 +1,6 @@
-import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
-import { queryOne, withTransaction } from '../../db/pool';
-import { hashPassword, verifyPassword } from '../../utils/password';
-import type { SignupInput } from './auth.schemas';
+import { queryOne } from '../../db/pool';
+import { verifyPassword } from '../../utils/password';
 import {
   signAccessToken,
   signRefreshToken,
@@ -22,6 +20,7 @@ interface UsuarioRow {
   papel: 'admin' | 'gestor';
   empresa_id: string;
   ativo: boolean;
+  super_admin: boolean;
 }
 
 export interface UsuarioPublico {
@@ -29,6 +28,7 @@ export interface UsuarioPublico {
   nome: string;
   email: string;
   papel: 'admin' | 'gestor';
+  superAdmin: boolean;
 }
 
 interface UsuarioAuthResult {
@@ -38,16 +38,23 @@ interface UsuarioAuthResult {
 }
 
 function usuarioToPublico(row: UsuarioRow): UsuarioPublico {
-  return { id: row.id, nome: row.nome, email: row.email, papel: row.papel };
+  return { id: row.id, nome: row.nome, email: row.email, papel: row.papel, superAdmin: row.super_admin };
 }
 
 function usuarioPayload(row: UsuarioRow): UsuarioTokenPayload {
-  return { sub: row.id, tipo: 'usuario', empresaId: row.empresa_id, email: row.email, papel: row.papel };
+  return {
+    sub: row.id,
+    tipo: 'usuario',
+    empresaId: row.empresa_id,
+    email: row.email,
+    papel: row.papel,
+    superAdmin: row.super_admin,
+  };
 }
 
 export async function login(email: string, senha: string): Promise<UsuarioAuthResult> {
   const usuario = await queryOne<UsuarioRow>(
-    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo FROM usuarios WHERE email = $1',
+    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo, super_admin FROM usuarios WHERE email = $1',
     [email.toLowerCase()],
   );
 
@@ -69,77 +76,9 @@ export async function login(email: string, senha: string): Promise<UsuarioAuthRe
   };
 }
 
-// ---------------------------------------------------------------------
-// Cadastro self-service de empresa (tenant) + 1º usuário admin
-// ---------------------------------------------------------------------
-
-/** Transforma um nome em slug: minúsculo, sem acento, só letras/números/hífen. */
-function slugify(texto: string): string {
-  return texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // remove acentos
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
-}
-
-/** Acha um slug livre a partir de uma base (base, base-2, base-3, ...). */
-async function slugLivre(base: string, client: PoolClient): Promise<string> {
-  const raiz = base || 'empresa';
-  for (let n = 1; ; n++) {
-    const candidato = n === 1 ? raiz : `${raiz}-${n}`;
-    const existe = await client.query('SELECT 1 FROM empresas WHERE slug = $1', [candidato]);
-    if (existe.rowCount === 0) return candidato;
-  }
-}
-
-export async function signup(input: SignupInput): Promise<UsuarioAuthResult> {
-  const email = input.email.toLowerCase();
-  // CNPJ é opcional; guardamos só os dígitos (ou null se não informado).
-  const cnpj = input.cnpj ? input.cnpj.replace(/\D/g, '') : null;
-
-  return withTransaction(async (client) => {
-    // Mensagens amigáveis antes de bater nas constraints do banco.
-    const emailEmUso = await client.query('SELECT 1 FROM usuarios WHERE email = $1', [email]);
-    if (emailEmUso.rowCount && emailEmUso.rowCount > 0) {
-      throw AppError.conflict('Este e-mail já está cadastrado');
-    }
-    if (cnpj) {
-      const cnpjEmUso = await client.query('SELECT 1 FROM empresas WHERE cnpj = $1', [cnpj]);
-      if (cnpjEmUso.rowCount && cnpjEmUso.rowCount > 0) {
-        throw AppError.conflict('Já existe uma empresa com este CNPJ');
-      }
-    }
-
-    const slug = await slugLivre(slugify(input.empresaNome), client);
-    const empresa = await client.query<{ id: string }>(
-      `INSERT INTO empresas (nome, cnpj, slug, plano)
-       VALUES ($1, $2, $3, 'trial') RETURNING id`,
-      [input.empresaNome, cnpj, slug],
-    );
-    const empresaId = empresa.rows[0]!.id;
-
-    const senhaHash = await hashPassword(input.senha);
-    const usuario = await client.query<UsuarioRow>(
-      `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id)
-       VALUES ($1, $2, $3, 'admin', $4)
-       RETURNING id, nome, email, senha_hash, papel, empresa_id, ativo`,
-      [input.nome, email, senhaHash, empresaId],
-    );
-    const row = usuario.rows[0]!;
-
-    return {
-      usuario: usuarioToPublico(row),
-      accessToken: signAccessToken(usuarioPayload(row)),
-      refreshToken: signRefreshToken(row.id, 'usuario'),
-    };
-  });
-}
-
 export async function getById(id: string): Promise<UsuarioPublico> {
   const usuario = await queryOne<UsuarioRow>(
-    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo FROM usuarios WHERE id = $1',
+    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo, super_admin FROM usuarios WHERE id = $1',
     [id],
   );
   if (!usuario) {
@@ -240,7 +179,7 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
   }
 
   const usuario = await queryOne<UsuarioRow>(
-    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo FROM usuarios WHERE id = $1',
+    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo, super_admin FROM usuarios WHERE id = $1',
     [payload.sub],
   );
   if (!usuario || !usuario.ativo) {

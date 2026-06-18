@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import bcrypt from 'bcryptjs';
 import { Client } from 'pg';
@@ -23,7 +23,11 @@ export default async function setup(): Promise<void> {
   await db.connect();
 
   const migrationsDir = resolve(process.cwd(), 'migrations');
-  for (const arquivo of ['001_core.sql', '002_operacional.sql', '003_multitenant.sql']) {
+  // Aplica TODAS as migrations .sql em ordem (001, 002, 003, 004, ...).
+  const arquivos = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+  for (const arquivo of arquivos) {
     const sql = readFileSync(resolve(migrationsDir, arquivo), 'utf8');
     await db.query(sql);
   }
@@ -32,8 +36,8 @@ export default async function setup(): Promise<void> {
   const EMPRESA_PADRAO_ID = '00000000-0000-0000-0000-000000000001';
   const hash = await bcrypt.hash(ADMIN_SENHA, 4);
   await db.query(
-    `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id)
-     VALUES ($1, $2, $3, 'admin', $4)
+    `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id, super_admin)
+     VALUES ($1, $2, $3, 'admin', $4, TRUE)
      ON CONFLICT (email) DO NOTHING`,
     ['Admin Teste', ADMIN_EMAIL, hash, EMPRESA_PADRAO_ID],
   );

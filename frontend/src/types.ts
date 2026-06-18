@@ -8,6 +8,25 @@ export interface UsuarioPublico {
   nome: string
   email: string
   papel: 'admin' | 'gestor'
+  superAdmin: boolean
+}
+
+/** Empresa-cliente, como listada no backoffice (super admin). */
+export interface Empresa {
+  id: string
+  nome: string
+  cnpj: string | null
+  slug: string | null
+  plano: string
+  ativo: boolean
+  criado_em: string
+  total_usuarios: number
+}
+
+/** Resultado da criação de empresa-cliente no backoffice. */
+export interface EmpresaCriada {
+  empresa: { id: string; nome: string; slug: string | null; plano: string }
+  admin: { id: string; nome: string; email: string }
 }
 
 export interface AuthResult {

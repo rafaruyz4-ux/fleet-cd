@@ -9,6 +9,7 @@ import { rotasRouter } from './modules/rotas/rotas.routes';
 import { alertasRouter } from './modules/alertas/alertas.routes';
 import { appRouter, deviceRouter } from './modules/gps/gps.routes';
 import { multasRouter } from './modules/multas/multas.routes';
+import { empresasAdminRouter } from './modules/empresas/empresas.routes';
 
 export const apiRouter = Router();
 
@@ -23,3 +24,4 @@ apiRouter.use('/alertas', alertasRouter);
 apiRouter.use('/app', deviceRouter); // adaptadores (token na query) antes do appRouter
 apiRouter.use('/app', appRouter);
 apiRouter.use('/multas', multasRouter);
+apiRouter.use('/admin/empresas', empresasAdminRouter); // backoffice (super admin)

@@ -22,18 +22,21 @@ async function seed(): Promise<void> {
   );
 
   if (existing) {
-    console.log(`[seed] usuário admin já existe: ${env.seedAdmin.email}`);
+    // Garante que a conta da equipe seja super admin (backoffice), mesmo em
+    // bancos criados antes da migration 004.
+    await pool.query('UPDATE usuarios SET super_admin = TRUE WHERE email = $1', [env.seedAdmin.email]);
+    console.log(`[seed] usuário admin já existe (super admin garantido): ${env.seedAdmin.email}`);
     return;
   }
 
   const senhaHash = await hashPassword(env.seedAdmin.senha);
   await pool.query(
-    `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id)
-     VALUES ($1, $2, $3, 'admin', $4)`,
+    `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id, super_admin)
+     VALUES ($1, $2, $3, 'admin', $4, TRUE)`,
     [env.seedAdmin.nome, env.seedAdmin.email, senhaHash, EMPRESA_PADRAO_ID],
   );
 
-  console.log(`[seed] usuário admin criado: ${env.seedAdmin.email}`);
+  console.log(`[seed] usuário admin (super admin) criado: ${env.seedAdmin.email}`);
   console.log('[seed] >>> troque a senha após o primeiro login.');
 }
 

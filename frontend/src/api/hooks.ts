@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, qs } from '@/lib/api'
 import type {
   Alerta,
+  Empresa,
+  EmpresaCriada,
   Motorista,
   Multa,
   NotaFiscal,
@@ -13,6 +15,33 @@ import type {
   Veiculo,
   Viagem,
 } from '@/types'
+
+// ---------------------------------------------------------------------
+// Backoffice — empresas-clientes (somente super admin)
+// ---------------------------------------------------------------------
+export interface CriarEmpresaInput {
+  empresaNome: string
+  cnpj?: string
+  plano?: 'trial' | 'ativo'
+  adminNome: string
+  adminEmail: string
+  adminSenha: string
+}
+
+export function useEmpresas() {
+  return useQuery({
+    queryKey: ['admin-empresas'],
+    queryFn: () => api.get<Empresa[]>('/admin/empresas'),
+  })
+}
+
+export function useCriarEmpresa() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CriarEmpresaInput) => api.post<EmpresaCriada>('/admin/empresas', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-empresas'] }),
+  })
+}
 
 // ---------------------------------------------------------------------
 // Viagens

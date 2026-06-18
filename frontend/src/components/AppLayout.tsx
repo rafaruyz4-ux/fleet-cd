@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   AlertTriangle,
+  Building2,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -22,8 +23,12 @@ const NAV = [
   { to: '/cadastros', label: 'Cadastros', icon: Users },
 ]
 
+// Itens exclusivos da equipe da plataforma (super admin).
+const NAV_SUPER = [{ to: '/bastidores', label: 'Bastidores', icon: Building2, end: false }]
+
 export function AppLayout() {
   const { usuario, logout } = useAuth()
+  const nav = usuario?.superAdmin ? [...NAV, ...NAV_SUPER] : NAV
 
   return (
     <div className="flex h-screen overflow-hidden bg-muted/30">
@@ -36,7 +41,7 @@ export function AppLayout() {
           <span className="font-semibold">Frota CD</span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

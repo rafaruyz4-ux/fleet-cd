@@ -62,6 +62,18 @@ export function requireMotorista(req: Request, _res: Response, next: NextFunctio
   next();
 }
 
+/** Exige que o principal seja um super admin (equipe da plataforma/backoffice). */
+export function requireSuperAdmin(req: Request, _res: Response, next: NextFunction): void {
+  const user = req.user;
+  if (!user) {
+    throw AppError.unauthorized();
+  }
+  if (user.tipo !== 'usuario' || !user.superAdmin) {
+    throw AppError.forbidden('Área restrita à equipe da plataforma');
+  }
+  next();
+}
+
 /** Exige um usuário do dashboard com um dos papéis informados. */
 export function requireRole(...papeis: Papel[]): RequestHandler {
   return (req, _res, next) => {
