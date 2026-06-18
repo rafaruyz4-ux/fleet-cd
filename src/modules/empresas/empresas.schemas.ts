@@ -15,3 +15,16 @@ export const criarEmpresaSchema = z.object({
 });
 
 export type CriarEmpresaInput = z.infer<typeof criarEmpresaSchema>;
+
+// Edição dos dados de uma empresa-cliente (tudo opcional — atualiza só o enviado).
+export const atualizarEmpresaSchema = z
+  .object({
+    nome: z.string().trim().min(2, 'Nome da empresa obrigatório').max(180).optional(),
+    // string vazia limpa o CNPJ; ausente = não mexe.
+    cnpj: z.string().trim().regex(cnpjRegex, 'CNPJ inválido').optional().or(z.literal('')),
+    plano: z.enum(['trial', 'ativo', 'suspenso', 'cancelado']).optional(),
+    ativo: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'Nada para atualizar' });
+
+export type AtualizarEmpresaInput = z.infer<typeof atualizarEmpresaSchema>;

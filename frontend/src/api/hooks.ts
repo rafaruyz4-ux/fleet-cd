@@ -4,6 +4,7 @@ import type {
   Alerta,
   Empresa,
   EmpresaCriada,
+  EmpresaDetalhe,
   Motorista,
   Multa,
   NotaFiscal,
@@ -40,6 +41,33 @@ export function useCriarEmpresa() {
   return useMutation({
     mutationFn: (input: CriarEmpresaInput) => api.post<EmpresaCriada>('/admin/empresas', input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-empresas'] }),
+  })
+}
+
+export function useEmpresa(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['admin-empresa', id],
+    queryFn: () => api.get<EmpresaDetalhe>(`/admin/empresas/${id}`),
+    enabled: !!id,
+  })
+}
+
+export interface AtualizarEmpresaInput {
+  nome?: string
+  cnpj?: string
+  plano?: 'trial' | 'ativo' | 'suspenso' | 'cancelado'
+  ativo?: boolean
+}
+
+export function useAtualizarEmpresa() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: AtualizarEmpresaInput }) =>
+      api.patch<EmpresaDetalhe>(`/admin/empresas/${id}`, input),
+    onSuccess: (emp) => {
+      qc.invalidateQueries({ queryKey: ['admin-empresas'] })
+      qc.invalidateQueries({ queryKey: ['admin-empresa', emp.id] })
+    },
   })
 }
 

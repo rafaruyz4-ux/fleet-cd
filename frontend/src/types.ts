@@ -29,6 +29,26 @@ export interface EmpresaCriada {
   admin: { id: string; nome: string; email: string }
 }
 
+export interface EmpresaUsuario {
+  id: string
+  nome: string
+  email: string
+  papel: 'admin' | 'gestor'
+  ativo: boolean
+}
+
+/** Detalhe de uma empresa-cliente (dados + usuários dela). */
+export interface EmpresaDetalhe {
+  id: string
+  nome: string
+  cnpj: string | null
+  slug: string | null
+  plano: string
+  ativo: boolean
+  criado_em: string
+  usuarios: EmpresaUsuario[]
+}
+
 export interface AuthResult {
   usuario: UsuarioPublico
   accessToken: string

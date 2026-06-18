@@ -113,3 +113,67 @@ describe('backoffice — criação de empresa-cliente (super admin)', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('backoffice — abrir e editar empresa (super admin)', () => {
+  async function criarEmpresa(token: string, over: Record<string, unknown> = {}) {
+    const res = await api()
+      .post('/api/admin/empresas')
+      .set('Authorization', bearer(token))
+      .send(payload(over));
+    return res.body.empresa.id as string;
+  }
+
+  it('GET /:id retorna a empresa com seus usuários', async () => {
+    const token = await loginGestor();
+    const id = await criarEmpresa(token, { adminNome: 'Maria Resp' });
+    const res = await api().get(`/api/admin/empresas/${id}`).set('Authorization', bearer(token));
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(id);
+    expect(Array.isArray(res.body.usuarios)).toBe(true);
+    expect(res.body.usuarios.some((u: { nome: string }) => u.nome === 'Maria Resp')).toBe(true);
+  });
+
+  it('PATCH /:id altera nome, plano e ativo', async () => {
+    const token = await loginGestor();
+    const id = await criarEmpresa(token);
+    const res = await api()
+      .patch(`/api/admin/empresas/${id}`)
+      .set('Authorization', bearer(token))
+      .send({ nome: 'Nome Alterado', plano: 'suspenso', ativo: false });
+    expect(res.status).toBe(200);
+    expect(res.body.nome).toBe('Nome Alterado');
+    expect(res.body.plano).toBe('suspenso');
+    expect(res.body.ativo).toBe(false);
+  });
+
+  it('PATCH em empresa inexistente → 404', async () => {
+    const token = await loginGestor();
+    const res = await api()
+      .patch('/api/admin/empresas/00000000-0000-0000-0000-0000000000ff')
+      .set('Authorization', bearer(token))
+      .send({ nome: 'X Ltda' });
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH com CNPJ já usado por outra empresa → 409', async () => {
+    const token = await loginGestor();
+    await criarEmpresa(token, { cnpj: '12.345.678/0001-95' });
+    const id2 = await criarEmpresa(token);
+    const res = await api()
+      .patch(`/api/admin/empresas/${id2}`)
+      .set('Authorization', bearer(token))
+      .send({ cnpj: '12345678000195' });
+    expect(res.status).toBe(409);
+  });
+
+  it('gestor comum não edita empresa → 403', async () => {
+    const superToken = await loginGestor();
+    const id = await criarEmpresa(superToken);
+    const gestor = await criarEmpresaComGestor();
+    const res = await api()
+      .patch(`/api/admin/empresas/${id}`)
+      .set('Authorization', bearer(gestor))
+      .send({ nome: 'Hack Ltda' });
+    expect(res.status).toBe(403);
+  });
+});

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { NovaEmpresaModal } from './bastidores/NovaEmpresaModal'
+import { EmpresaDetalheModal } from './bastidores/EmpresaDetalheModal'
 
 const PLANO_BADGE: Record<string, { label: string; variant: 'success' | 'warning' | 'muted' | 'destructive' }> = {
   ativo: { label: 'Ativo', variant: 'success' },
@@ -24,6 +25,7 @@ function formatarData(iso: string): string {
 export function BackofficePage() {
   const { data: empresas, isLoading, isError } = useEmpresas()
   const [modalAberto, setModalAberto] = useState(false)
+  const [empresaAberta, setEmpresaAberta] = useState<string | null>(null)
 
   return (
     <>
@@ -75,13 +77,18 @@ export function BackofficePage() {
                 <TH>Plano</TH>
                 <TH>Usuários</TH>
                 <TH>Criada em</TH>
+                <TH></TH>
               </TR>
             </THead>
             <TBody>
               {empresas.map((e: Empresa) => {
                 const badge = PLANO_BADGE[e.plano] ?? { label: e.plano, variant: 'muted' as const }
                 return (
-                  <TR key={e.id}>
+                  <TR
+                    key={e.id}
+                    className="cursor-pointer"
+                    onClick={() => setEmpresaAberta(e.id)}
+                  >
                     <TD className="font-medium">{e.nome}</TD>
                     <TD className="text-muted-foreground">{e.cnpj ?? '—'}</TD>
                     <TD>
@@ -89,6 +96,11 @@ export function BackofficePage() {
                     </TD>
                     <TD>{e.total_usuarios}</TD>
                     <TD className="text-muted-foreground">{formatarData(e.criado_em)}</TD>
+                    <TD className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => setEmpresaAberta(e.id)}>
+                        Abrir
+                      </Button>
+                    </TD>
                   </TR>
                 )
               })}
@@ -98,6 +110,11 @@ export function BackofficePage() {
       </div>
 
       <NovaEmpresaModal open={modalAberto} onClose={() => setModalAberto(false)} />
+      <EmpresaDetalheModal
+        empresaId={empresaAberta}
+        open={empresaAberta !== null}
+        onClose={() => setEmpresaAberta(null)}
+      />
     </>
   )
 }

@@ -1,8 +1,8 @@
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
-import { query, withTransaction } from '../../db/pool';
+import { query, queryOne, withTransaction } from '../../db/pool';
 import { hashPassword } from '../../utils/password';
-import type { CriarEmpresaInput } from './empresas.schemas';
+import type { AtualizarEmpresaInput, CriarEmpresaInput } from './empresas.schemas';
 
 // ---------------------------------------------------------------------
 // Helpers de slug (identificador curto e único da empresa)
@@ -52,6 +52,90 @@ export async function listar(): Promise<EmpresaResumo[]> {
       GROUP BY e.id
       ORDER BY e.criado_em DESC`,
   );
+}
+
+// ---------------------------------------------------------------------
+// Detalhe de uma empresa-cliente (dados + usuários dela)
+// ---------------------------------------------------------------------
+export interface EmpresaUsuario {
+  id: string;
+  nome: string;
+  email: string;
+  papel: 'admin' | 'gestor';
+  ativo: boolean;
+}
+
+export interface EmpresaDetalhe {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  slug: string | null;
+  plano: string;
+  ativo: boolean;
+  criado_em: string;
+  usuarios: EmpresaUsuario[];
+}
+
+export async function obter(id: string): Promise<EmpresaDetalhe> {
+  const empresa = await queryOne<Omit<EmpresaDetalhe, 'usuarios'>>(
+    'SELECT id, nome, cnpj, slug, plano, ativo, criado_em FROM empresas WHERE id = $1',
+    [id],
+  );
+  if (!empresa) {
+    throw AppError.notFound('Empresa não encontrada');
+  }
+  const usuarios = await query<EmpresaUsuario>(
+    'SELECT id, nome, email, papel, ativo FROM usuarios WHERE empresa_id = $1 ORDER BY criado_em',
+    [id],
+  );
+  return { ...empresa, usuarios };
+}
+
+// ---------------------------------------------------------------------
+// Edição dos dados de uma empresa-cliente
+// ---------------------------------------------------------------------
+export async function atualizar(id: string, input: AtualizarEmpresaInput): Promise<EmpresaDetalhe> {
+  const existe = await queryOne<{ id: string }>('SELECT id FROM empresas WHERE id = $1', [id]);
+  if (!existe) {
+    throw AppError.notFound('Empresa não encontrada');
+  }
+
+  const sets: string[] = [];
+  const valores: unknown[] = [];
+  let i = 1;
+
+  if (input.nome !== undefined) {
+    sets.push(`nome = $${i++}`);
+    valores.push(input.nome);
+  }
+  if (input.plano !== undefined) {
+    sets.push(`plano = $${i++}`);
+    valores.push(input.plano);
+  }
+  if (input.ativo !== undefined) {
+    sets.push(`ativo = $${i++}`);
+    valores.push(input.ativo);
+  }
+  if (input.cnpj !== undefined) {
+    const cnpj = input.cnpj ? input.cnpj.replace(/\D/g, '') : null;
+    if (cnpj) {
+      const conflito = await queryOne<{ id: string }>(
+        'SELECT id FROM empresas WHERE cnpj = $1 AND id <> $2',
+        [cnpj, id],
+      );
+      if (conflito) {
+        throw AppError.conflict('Já existe uma empresa com este CNPJ');
+      }
+    }
+    sets.push(`cnpj = $${i++}`);
+    valores.push(cnpj);
+  }
+
+  if (sets.length > 0) {
+    valores.push(id);
+    await query(`UPDATE empresas SET ${sets.join(', ')} WHERE id = $${i}`, valores);
+  }
+  return obter(id);
 }
 
 // ---------------------------------------------------------------------
