@@ -1,6 +1,8 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Flag, Play, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Crosshair, Flag, MapPin, Play, XCircle } from 'lucide-react'
+import type { FocoMapa } from '@/components/TripMap'
+import type { PontoTrajeto } from '@/types'
 import {
   useAlertasDaViagem,
   useRota,
@@ -35,6 +37,31 @@ export function ViagemDetailPage() {
   const { data: alertas } = useAlertasDaViagem(id)
   const { data: rota } = useRota(viagem?.rota_planejada_id)
   const { iniciar, encerrar, cancelar, marcarParada } = useViagemMutations()
+
+  const [foco, setFoco] = useState<FocoMapa | null>(null)
+  const mapaRef = useRef<HTMLDivElement>(null)
+
+  // Faz o mapa "voar" até um ponto e traz o mapa para a vista.
+  const focar = (lng: number, lat: number) => {
+    setFoco((f) => ({ lng, lat, nonce: (f?.nonce ?? 0) + 1 }))
+    mapaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  // Localização de cada parada: a parada não guarda coordenada, então usamos
+  // o ponto de GPS mais próximo do horário de entrega/saída (onde o caminhão
+  // estava na hora). Paradas sem esse horário não ficam clicáveis.
+  const paradaCoord = useMemo(() => {
+    const m = new Map<string, { lng: number; lat: number }>()
+    const pontos = trajetoria?.pontos ?? []
+    if (!pontos.length) return m
+    for (const p of viagem?.paradas ?? []) {
+      const quando = p.chegada_real ?? p.saida_real
+      if (!quando) continue
+      const c = pontoNoTempo(pontos, quando)
+      if (c) m.set(p.id, c)
+    }
+    return m
+  }, [viagem?.paradas, trajetoria?.pontos])
 
   if (isLoading || error || !viagem) {
     return (
@@ -123,21 +150,24 @@ export function ViagemDetailPage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Trajeto</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Suspense fallback={<div className="h-[420px] w-full"><PageLoader label="Carregando mapa…" /></div>}>
-                <TripMap
-                  className="h-[420px] w-full"
-                  pontos={trajetoria?.pontos ?? []}
-                  rota={rota?.linha}
-                  alertas={alertas}
-                />
-              </Suspense>
-            </CardContent>
-          </Card>
+          <div ref={mapaRef} className="lg:col-span-2">
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <CardTitle>Trajeto</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Suspense fallback={<div className="h-[420px] w-full"><PageLoader label="Carregando mapa…" /></div>}>
+                  <TripMap
+                    className="h-[420px] w-full"
+                    pontos={trajetoria?.pontos ?? []}
+                    rota={rota?.linha}
+                    alertas={alertas}
+                    foco={foco}
+                  />
+                </Suspense>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Paradas */}
@@ -159,36 +189,50 @@ export function ViagemDetailPage() {
                 </TR>
               </THead>
               <TBody>
-                {viagem.paradas.map((p) => (
-                  <TR key={p.id}>
-                    <TD className="text-muted-foreground">{p.ordem}</TD>
-                    <TD className="font-medium">{p.nf_numero ?? '—'}</TD>
-                    <TD>{p.nf_destinatario_nome ?? '—'}</TD>
-                    <TD>
-                      <ParadaStatusBadge status={p.status} />
-                    </TD>
-                    <TD>{formatDateTime(p.chegada_prevista)}</TD>
-                    <TD>{formatDateTime(p.chegada_real)}</TD>
-                    <TD className="text-right">
-                      {p.status === 'pendente' && emAndamento && viagem.iniciada_em && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() =>
-                            marcarParada.mutate({
-                              viagemId: viagem.id,
-                              paradaId: p.id,
-                              status: 'entregue',
-                            })
-                          }
-                        >
-                          <CheckCircle2 className="h-4 w-4" /> Entregar
-                        </Button>
-                      )}
-                    </TD>
-                  </TR>
-                ))}
+                {viagem.paradas.map((p) => {
+                  const coord = paradaCoord.get(p.id)
+                  return (
+                    <TR
+                      key={p.id}
+                      className={coord ? 'cursor-pointer' : undefined}
+                      onClick={coord ? () => focar(coord.lng, coord.lat) : undefined}
+                      title={coord ? 'Ver no mapa onde foi entregue' : undefined}
+                    >
+                      <TD className="text-muted-foreground">{p.ordem}</TD>
+                      <TD className="font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {coord && <MapPin className="h-3.5 w-3.5 text-primary" />}
+                          {p.nf_numero ?? '—'}
+                        </span>
+                      </TD>
+                      <TD>{p.nf_destinatario_nome ?? '—'}</TD>
+                      <TD>
+                        <ParadaStatusBadge status={p.status} />
+                      </TD>
+                      <TD>{formatDateTime(p.chegada_prevista)}</TD>
+                      <TD>{formatDateTime(p.chegada_real)}</TD>
+                      <TD className="text-right">
+                        {p.status === 'pendente' && emAndamento && viagem.iniciada_em && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              marcarParada.mutate({
+                                viagemId: viagem.id,
+                                paradaId: p.id,
+                                status: 'entregue',
+                              })
+                            }}
+                          >
+                            <CheckCircle2 className="h-4 w-4" /> Entregar
+                          </Button>
+                        )}
+                      </TD>
+                    </TR>
+                  )
+                })}
               </TBody>
             </Table>
           ) : (
@@ -203,20 +247,30 @@ export function ViagemDetailPage() {
           </h2>
           {alertas && alertas.length > 0 ? (
             <div className="space-y-2">
-              {alertas.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <AlertaTipoBadge tipo={a.tipo} />
-                    <span className="text-sm">{a.descricao ?? '—'}</span>
+              {alertas.map((a) => {
+                const coord = a.coordenada
+                return (
+                  <div
+                    key={a.id}
+                    className={`flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 ${
+                      coord ? 'cursor-pointer transition-colors hover:bg-accent' : ''
+                    }`}
+                    onClick={coord ? () => focar(coord.lng, coord.lat) : undefined}
+                    title={coord ? 'Ver no mapa onde ocorreu' : undefined}
+                  >
+                    <div className="flex items-center gap-3">
+                      <AlertaTipoBadge tipo={a.tipo} />
+                      <span className="text-sm">{a.descricao ?? '—'}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(a.criado_em)}
+                      </span>
+                      {coord && <Crosshair className="h-4 w-4 text-primary" />}
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateTime(a.criado_em)}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Nenhum alerta nesta viagem.</p>
@@ -225,6 +279,25 @@ export function ViagemDetailPage() {
       </div>
     </div>
   )
+}
+
+// Acha o ponto de GPS mais próximo de um horário (até 30 min de diferença).
+function pontoNoTempo(
+  pontos: PontoTrajeto[],
+  iso: string,
+): { lng: number; lat: number } | null {
+  const alvo = new Date(iso).getTime()
+  if (Number.isNaN(alvo)) return null
+  let melhor: PontoTrajeto | null = null
+  let menorDif = Infinity
+  for (const p of pontos) {
+    const dif = Math.abs(new Date(p.registrado_em).getTime() - alvo)
+    if (dif < menorDif) {
+      menorDif = dif
+      melhor = p
+    }
+  }
+  return melhor && menorDif < 30 * 60 * 1000 ? { lng: melhor.lng, lat: melhor.lat } : null
 }
 
 function Info({ label, value }: { label: string; value: string }) {
