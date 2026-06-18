@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useAtualizarEmpresa, useEmpresa } from '@/api/hooks'
+import { KeyRound } from 'lucide-react'
+import { useAtualizarEmpresa, useEmpresa, useRedefinirSenha } from '@/api/hooks'
 import { ApiError } from '@/lib/api'
-import type { EmpresaDetalhe } from '@/types'
+import type { EmpresaDetalhe, EmpresaUsuario } from '@/types'
 import { FormField } from '@/components/FormField'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
@@ -87,22 +88,25 @@ function EmpresaForm({ empresa, onClose }: { empresa: EmpresaDetalhe; onClose: (
       {/* Usuários da empresa */}
       <div className="rounded-md border bg-muted/20 p-3">
         <p className="mb-2 text-sm font-medium">Usuários ({empresa.usuarios.length})</p>
-        <ul className="space-y-1.5">
+        <ul className="space-y-3">
           {empresa.usuarios.map((u) => (
-            <li key={u.id} className="flex items-center justify-between gap-2 text-sm">
-              <span className="min-w-0">
-                <span className="font-medium">{u.nome}</span>{' '}
-                <span className="text-muted-foreground">· {u.email}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-1">
-                <Badge variant="muted">{u.papel}</Badge>
-                {!u.ativo && <Badge variant="destructive">inativo</Badge>}
-              </span>
+            <li key={u.id} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0">
+                  <span className="font-medium">{u.nome}</span>{' '}
+                  <span className="text-muted-foreground">· {u.email}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <Badge variant="muted">{u.papel}</Badge>
+                  {!u.ativo && <Badge variant="destructive">inativo</Badge>}
+                </span>
+              </div>
+              <RedefinirSenhaInline empresaId={empresa.id} usuario={u} />
             </li>
           ))}
         </ul>
         <p className="mt-2 text-xs text-muted-foreground">
-          Endereço de acesso (login) do cliente. Trocar senha do cliente: próxima etapa.
+          Endereço de acesso (login) do cliente. Use “Redefinir senha” quando o cliente esquecer.
         </p>
       </div>
 
@@ -117,6 +121,93 @@ function EmpresaForm({ empresa, onClose }: { empresa: EmpresaDetalhe; onClose: (
         <Button type="submit" disabled={atualizar.isPending}>
           {atualizar.isPending && <Spinner />}
           Salvar alterações
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// Botão + formulário inline para redefinir a senha de um usuário do cliente.
+function RedefinirSenhaInline({
+  empresaId,
+  usuario,
+}: {
+  empresaId: string
+  usuario: EmpresaUsuario
+}) {
+  const redefinir = useRedefinirSenha()
+  const [aberto, setAberto] = useState(false)
+  const [senha, setSenha] = useState('')
+  const [erro, setErro] = useState<string | null>(null)
+  const [okSenha, setOkSenha] = useState<string | null>(null)
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault()
+    setErro(null)
+    try {
+      await redefinir.mutateAsync({ empresaId, usuarioId: usuario.id, senha })
+      setOkSenha(senha)
+      setAberto(false)
+      setSenha('')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 400)
+        setErro('A senha precisa ter ao menos 8 caracteres.')
+      else setErro('Não foi possível redefinir a senha.')
+    }
+  }
+
+  if (okSenha) {
+    return (
+      <p className="rounded-md bg-success/10 px-3 py-2 text-xs text-success">
+        Senha redefinida. Envie ao cliente: <strong>{okSenha}</strong>
+      </p>
+    )
+  }
+
+  if (!aberto) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setAberto(true)
+          setErro(null)
+        }}
+      >
+        <KeyRound className="h-3.5 w-3.5" />
+        Redefinir senha
+      </Button>
+    )
+  }
+
+  return (
+    <form onSubmit={salvar} className="space-y-2 rounded-md border bg-card p-2">
+      <Input
+        value={senha}
+        onChange={(e) => setSenha(e.target.value)}
+        placeholder="Nova senha (mín. 8 caracteres)"
+        minLength={8}
+        required
+        autoFocus
+      />
+      {erro && <p className="text-xs text-destructive">{erro}</p>}
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setAberto(false)
+            setSenha('')
+            setErro(null)
+          }}
+        >
+          Cancelar
+        </Button>
+        <Button type="submit" size="sm" disabled={redefinir.isPending}>
+          {redefinir.isPending && <Spinner />}
+          Salvar senha
         </Button>
       </div>
     </form>

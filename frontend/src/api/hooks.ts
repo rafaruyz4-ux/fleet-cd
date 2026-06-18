@@ -71,6 +71,21 @@ export function useAtualizarEmpresa() {
   })
 }
 
+export function useRedefinirSenha() {
+  return useMutation({
+    mutationFn: ({
+      empresaId,
+      usuarioId,
+      senha,
+    }: {
+      empresaId: string
+      usuarioId: string
+      senha: string
+    }) =>
+      api.post<{ ok: boolean }>(`/admin/empresas/${empresaId}/usuarios/${usuarioId}/senha`, { senha }),
+  })
+}
+
 // ---------------------------------------------------------------------
 // Viagens
 // ---------------------------------------------------------------------

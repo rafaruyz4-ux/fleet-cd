@@ -177,3 +177,64 @@ describe('backoffice — abrir e editar empresa (super admin)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('backoffice — redefinir senha de usuário (super admin)', () => {
+  // Cria empresa e devolve { id da empresa, id do usuário admin, email }.
+  async function criarComUsuario(token: string) {
+    const email = emailUnico();
+    const criada = await api()
+      .post('/api/admin/empresas')
+      .set('Authorization', bearer(token))
+      .send(payload({ adminEmail: email, adminSenha: 'inicial-12345' }));
+    const empresaId = criada.body.empresa.id as string;
+    const detalhe = await api().get(`/api/admin/empresas/${empresaId}`).set('Authorization', bearer(token));
+    return { empresaId, usuarioId: detalhe.body.usuarios[0].id as string, email };
+  }
+
+  it('redefine a senha e o cliente loga com a nova', async () => {
+    const token = await loginGestor();
+    const { empresaId, usuarioId, email } = await criarComUsuario(token);
+    const res = await api()
+      .post(`/api/admin/empresas/${empresaId}/usuarios/${usuarioId}/senha`)
+      .set('Authorization', bearer(token))
+      .send({ senha: 'nova-senha-999' });
+    expect(res.status).toBe(200);
+
+    const login = await api().post('/api/auth/login').send({ email, senha: 'nova-senha-999' });
+    expect(login.status).toBe(200);
+    expect(login.body.accessToken).toBeTruthy();
+  });
+
+  it('não redefine usuário de OUTRA empresa (404)', async () => {
+    const token = await loginGestor();
+    const a = await criarComUsuario(token);
+    const b = await criarComUsuario(token);
+    // tenta usar o id do usuário de A sob a empresa B → não pertence → 404
+    const res = await api()
+      .post(`/api/admin/empresas/${b.empresaId}/usuarios/${a.usuarioId}/senha`)
+      .set('Authorization', bearer(token))
+      .send({ senha: 'qualquer-12345' });
+    expect(res.status).toBe(404);
+  });
+
+  it('senha curta → 400', async () => {
+    const token = await loginGestor();
+    const { empresaId, usuarioId } = await criarComUsuario(token);
+    const res = await api()
+      .post(`/api/admin/empresas/${empresaId}/usuarios/${usuarioId}/senha`)
+      .set('Authorization', bearer(token))
+      .send({ senha: '123' });
+    expect(res.status).toBe(400);
+  });
+
+  it('gestor comum não redefine senha → 403', async () => {
+    const token = await loginGestor();
+    const { empresaId, usuarioId } = await criarComUsuario(token);
+    const gestor = await criarEmpresaComGestor();
+    const res = await api()
+      .post(`/api/admin/empresas/${empresaId}/usuarios/${usuarioId}/senha`)
+      .set('Authorization', bearer(gestor))
+      .send({ senha: 'nova-senha-999' });
+    expect(res.status).toBe(403);
+  });
+});

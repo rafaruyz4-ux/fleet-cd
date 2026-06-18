@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { requireAuth, requireSuperAdmin, requireUsuario } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
-import { atualizarEmpresaSchema, criarEmpresaSchema } from './empresas.schemas';
+import {
+  atualizarEmpresaSchema,
+  criarEmpresaSchema,
+  redefinirSenhaSchema,
+} from './empresas.schemas';
 import * as empresasService from './empresas.service';
 
 // Backoffice da plataforma: TUDO aqui exige um super admin (equipe que vende).
@@ -41,5 +45,15 @@ empresasAdminRouter.patch(
   validate({ body: atualizarEmpresaSchema }),
   asyncHandler(async (req, res) => {
     res.json(await empresasService.atualizar(req.params.id!, req.body));
+  }),
+);
+
+// Redefine a senha de um usuário da empresa (cliente esqueceu a senha).
+empresasAdminRouter.post(
+  '/:id/usuarios/:usuarioId/senha',
+  validate({ body: redefinirSenhaSchema }),
+  asyncHandler(async (req, res) => {
+    await empresasService.redefinirSenha(req.params.id!, req.params.usuarioId!, req.body.senha);
+    res.json({ ok: true });
   }),
 );

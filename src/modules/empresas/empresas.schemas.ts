@@ -28,3 +28,10 @@ export const atualizarEmpresaSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'Nada para atualizar' });
 
 export type AtualizarEmpresaInput = z.infer<typeof atualizarEmpresaSchema>;
+
+// Redefinição de senha de um usuário da empresa (cliente esqueceu a senha).
+export const redefinirSenhaSchema = z.object({
+  senha: z.string().min(8, 'A senha precisa ter ao menos 8 caracteres').max(200),
+});
+
+export type RedefinirSenhaInput = z.infer<typeof redefinirSenhaSchema>;

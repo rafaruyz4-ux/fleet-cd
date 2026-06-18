@@ -138,6 +138,26 @@ export async function atualizar(id: string, input: AtualizarEmpresaInput): Promi
   return obter(id);
 }
 
+/**
+ * Redefine a senha de um usuário da empresa (cliente esqueceu a senha).
+ * Só atinge usuário que pertence à própria empresa (trava de tenant).
+ */
+export async function redefinirSenha(
+  empresaId: string,
+  usuarioId: string,
+  senha: string,
+): Promise<void> {
+  const usuario = await queryOne<{ id: string }>(
+    'SELECT id FROM usuarios WHERE id = $1 AND empresa_id = $2',
+    [usuarioId, empresaId],
+  );
+  if (!usuario) {
+    throw AppError.notFound('Usuário não encontrado nesta empresa');
+  }
+  const senhaHash = await hashPassword(senha);
+  await query('UPDATE usuarios SET senha_hash = $1 WHERE id = $2', [senhaHash, usuarioId]);
+}
+
 // ---------------------------------------------------------------------
 // Criação de empresa-cliente + 1º usuário admin (após fechar contrato)
 // ---------------------------------------------------------------------
