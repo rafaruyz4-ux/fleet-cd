@@ -90,10 +90,10 @@ const PARADA_SELECT = `
 // ---------------------------------------------------------------------
 // Leituras
 // ---------------------------------------------------------------------
-async function fetchViagemRow(run: Runner, id: string): Promise<ViagemRow | null> {
+async function fetchViagemRow(run: Runner, empresaId: string, id: string): Promise<ViagemRow | null> {
   const rows = await run<ViagemRow>(
-    `SELECT ${VIAGEM_COLS} ${VIAGEM_FROM} WHERE v.id = $1`,
-    [id],
+    `SELECT ${VIAGEM_COLS} ${VIAGEM_FROM} WHERE v.id = $1 AND v.empresa_id = $2`,
+    [id, empresaId],
   );
   return rows[0] ?? null;
 }
@@ -102,8 +102,8 @@ function fetchParadas(run: Runner, viagemId: string): Promise<Parada[]> {
   return run<ParadaRow>(PARADA_SELECT, [viagemId]);
 }
 
-async function getViagemComParadas(run: Runner, id: string): Promise<Viagem> {
-  const row = await fetchViagemRow(run, id);
+async function getViagemComParadas(run: Runner, empresaId: string, id: string): Promise<Viagem> {
+  const row = await fetchViagemRow(run, empresaId, id);
   if (!row) {
     throw AppError.notFound('Viagem não encontrada');
   }
@@ -112,8 +112,8 @@ async function getViagemComParadas(run: Runner, id: string): Promise<Viagem> {
   return viagem;
 }
 
-export async function getById(id: string): Promise<Viagem> {
-  return getViagemComParadas(poolRunner, id);
+export async function getById(empresaId: string, id: string): Promise<Viagem> {
+  return getViagemComParadas(poolRunner, empresaId, id);
 }
 
 export interface ListViagensResult {
@@ -123,10 +123,10 @@ export interface ListViagensResult {
   offset: number;
 }
 
-export async function list(q: ListViagensQuery): Promise<ListViagensResult> {
-  const where: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
+export async function list(empresaId: string, q: ListViagensQuery): Promise<ListViagensResult> {
+  const where: string[] = ['v.empresa_id = $1'];
+  const values: unknown[] = [empresaId];
+  let i = 2;
 
   if (q.status) {
     where.push(`v.status = $${i++}`);
@@ -176,14 +176,20 @@ export async function list(q: ListViagensQuery): Promise<ListViagensResult> {
 // ---------------------------------------------------------------------
 // Validações de cadastro (veículo / motorista ativos)
 // ---------------------------------------------------------------------
-async function assertVeiculoDisponivel(run: Runner, id: string): Promise<void> {
-  const rows = await run<{ ativo: boolean }>('SELECT ativo FROM veiculos WHERE id = $1', [id]);
+async function assertVeiculoDisponivel(run: Runner, empresaId: string, id: string): Promise<void> {
+  const rows = await run<{ ativo: boolean }>(
+    'SELECT ativo FROM veiculos WHERE id = $1 AND empresa_id = $2',
+    [id, empresaId],
+  );
   if (!rows[0]) throw AppError.badRequest('Veículo não encontrado');
   if (!rows[0].ativo) throw AppError.badRequest('Veículo inativo não pode receber viagem');
 }
 
-async function assertMotoristaDisponivel(run: Runner, id: string): Promise<void> {
-  const rows = await run<{ ativo: boolean }>('SELECT ativo FROM motoristas WHERE id = $1', [id]);
+async function assertMotoristaDisponivel(run: Runner, empresaId: string, id: string): Promise<void> {
+  const rows = await run<{ ativo: boolean }>(
+    'SELECT ativo FROM motoristas WHERE id = $1 AND empresa_id = $2',
+    [id, empresaId],
+  );
   if (!rows[0]) throw AppError.badRequest('Motorista não encontrado');
   if (!rows[0].ativo) throw AppError.badRequest('Motorista inativo não pode receber viagem');
 }
@@ -192,44 +198,48 @@ async function assertMotoristaDisponivel(run: Runner, id: string): Promise<void>
 // tenha sido iniciada ou não.
 async function alocarNfComoParada(
   run: Runner,
+  empresaId: string,
   viagemId: string,
   nfId: string,
   ordem: number,
   viagemIniciada: boolean,
   chegadaPrevista?: Date,
 ): Promise<void> {
-  const nf = await run<{ status: string }>('SELECT status FROM notas_fiscais WHERE id = $1', [
-    nfId,
-  ]);
+  const nf = await run<{ status: string }>(
+    'SELECT status FROM notas_fiscais WHERE id = $1 AND empresa_id = $2',
+    [nfId, empresaId],
+  );
   if (!nf[0]) throw AppError.badRequest(`NF ${nfId} não encontrada`);
   if (nf[0].status === 'entregue') {
     throw AppError.badRequest(`NF ${nfId} já foi entregue e não pode ser alocada`);
   }
 
   await run(
-    `INSERT INTO paradas (viagem_id, nf_id, ordem, chegada_prevista, status)
-     VALUES ($1, $2, $3, $4, 'pendente')`,
-    [viagemId, nfId, ordem, chegadaPrevista ?? null],
+    `INSERT INTO paradas (empresa_id, viagem_id, nf_id, ordem, chegada_prevista, status)
+     VALUES ($1, $2, $3, $4, $5, 'pendente')`,
+    [empresaId, viagemId, nfId, ordem, chegadaPrevista ?? null],
   );
-  await run('UPDATE notas_fiscais SET status = $1 WHERE id = $2', [
+  await run('UPDATE notas_fiscais SET status = $1 WHERE id = $2 AND empresa_id = $3', [
     viagemIniciada ? 'em_viagem' : 'alocada',
     nfId,
+    empresaId,
   ]);
 }
 
 // ---------------------------------------------------------------------
 // Criação / atualização
 // ---------------------------------------------------------------------
-export async function create(input: CreateViagemInput): Promise<Viagem> {
+export async function create(empresaId: string, input: CreateViagemInput): Promise<Viagem> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
-    await assertVeiculoDisponivel(run, input.veiculo_id);
-    await assertMotoristaDisponivel(run, input.motorista_id);
+    await assertVeiculoDisponivel(run, empresaId, input.veiculo_id);
+    await assertMotoristaDisponivel(run, empresaId, input.motorista_id);
 
     const inserted = await run<{ id: string }>(
-      `INSERT INTO viagens (veiculo_id, motorista_id, rota_planejada_id, km_inicial)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
+      `INSERT INTO viagens (empresa_id, veiculo_id, motorista_id, rota_planejada_id, km_inicial)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [
+        empresaId,
         input.veiculo_id,
         input.motorista_id,
         input.rota_planejada_id ?? null,
@@ -241,23 +251,23 @@ export async function create(input: CreateViagemInput): Promise<Viagem> {
     if (input.nf_ids?.length) {
       let ordem = 1;
       for (const nfId of input.nf_ids) {
-        await alocarNfComoParada(run, viagemId, nfId, ordem++, false);
+        await alocarNfComoParada(run, empresaId, viagemId, nfId, ordem++, false);
       }
     }
 
-    return getViagemComParadas(run, viagemId);
+    return getViagemComParadas(run, empresaId, viagemId);
   });
 }
 
-export async function update(id: string, input: UpdateViagemInput): Promise<Viagem> {
-  const atual = await fetchViagemRow(poolRunner, id);
+export async function update(empresaId: string, id: string, input: UpdateViagemInput): Promise<Viagem> {
+  const atual = await fetchViagemRow(poolRunner, empresaId, id);
   if (!atual) throw AppError.notFound('Viagem não encontrada');
 
   return withTransaction(async (client) => {
     const run = clientRunner(client);
 
-    if (input.veiculo_id !== undefined) await assertVeiculoDisponivel(run, input.veiculo_id);
-    if (input.motorista_id !== undefined) await assertMotoristaDisponivel(run, input.motorista_id);
+    if (input.veiculo_id !== undefined) await assertVeiculoDisponivel(run, empresaId, input.veiculo_id);
+    if (input.motorista_id !== undefined) await assertMotoristaDisponivel(run, empresaId, input.motorista_id);
 
     const sets: string[] = [];
     const values: unknown[] = [];
@@ -274,21 +284,21 @@ export async function update(id: string, input: UpdateViagemInput): Promise<Viag
     if (input.km_final !== undefined) assign('km_final', input.km_final);
 
     if (sets.length > 0) {
-      values.push(id);
-      await run(`UPDATE viagens SET ${sets.join(', ')} WHERE id = $${i}`, values);
+      values.push(id, empresaId);
+      await run(`UPDATE viagens SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`, values);
     }
 
-    return getViagemComParadas(run, id);
+    return getViagemComParadas(run, empresaId, id);
   });
 }
 
 // ---------------------------------------------------------------------
 // Ciclo de vida
 // ---------------------------------------------------------------------
-export async function iniciar(id: string, input: IniciarViagemInput): Promise<Viagem> {
+export async function iniciar(empresaId: string, id: string, input: IniciarViagemInput): Promise<Viagem> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
-    const viagem = await fetchViagemRow(run, id);
+    const viagem = await fetchViagemRow(run, empresaId, id);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
     if (viagem.status !== 'em_andamento') {
       throw AppError.badRequest(`Viagem ${viagem.status} não pode ser iniciada`);
@@ -301,8 +311,8 @@ export async function iniciar(id: string, input: IniciarViagemInput): Promise<Vi
       `UPDATE viagens
          SET iniciada_em = COALESCE($1, now()),
              km_inicial = COALESCE($2, km_inicial)
-       WHERE id = $3`,
-      [input.iniciada_em ?? null, input.km_inicial ?? null, id],
+       WHERE id = $3 AND empresa_id = $4`,
+      [input.iniciada_em ?? null, input.km_inicial ?? null, id, empresaId],
     );
     // NFs alocadas passam a "em_viagem".
     await run(
@@ -312,14 +322,14 @@ export async function iniciar(id: string, input: IniciarViagemInput): Promise<Vi
       [id],
     );
 
-    return getViagemComParadas(run, id);
+    return getViagemComParadas(run, empresaId, id);
   });
 }
 
-export async function encerrar(id: string, input: EncerrarViagemInput): Promise<Viagem> {
+export async function encerrar(empresaId: string, id: string, input: EncerrarViagemInput): Promise<Viagem> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
-    const viagem = await fetchViagemRow(run, id);
+    const viagem = await fetchViagemRow(run, empresaId, id);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
     if (viagem.status !== 'em_andamento') {
       throw AppError.badRequest(`Viagem ${viagem.status} não pode ser encerrada`);
@@ -337,18 +347,18 @@ export async function encerrar(id: string, input: EncerrarViagemInput): Promise<
          SET encerrada_em = COALESCE($1, now()),
              km_final = COALESCE($2, km_final),
              status = 'encerrada'
-       WHERE id = $3`,
-      [input.encerrada_em ?? null, input.km_final ?? null, id],
+       WHERE id = $3 AND empresa_id = $4`,
+      [input.encerrada_em ?? null, input.km_final ?? null, id, empresaId],
     );
 
-    return getViagemComParadas(run, id);
+    return getViagemComParadas(run, empresaId, id);
   });
 }
 
-export async function cancelar(id: string): Promise<Viagem> {
+export async function cancelar(empresaId: string, id: string): Promise<Viagem> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
-    const viagem = await fetchViagemRow(run, id);
+    const viagem = await fetchViagemRow(run, empresaId, id);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
     if (viagem.status === 'encerrada') {
       throw AppError.badRequest('Viagem encerrada não pode ser cancelada');
@@ -357,7 +367,7 @@ export async function cancelar(id: string): Promise<Viagem> {
       throw AppError.badRequest('Viagem já está cancelada');
     }
 
-    await run(`UPDATE viagens SET status = 'cancelada' WHERE id = $1`, [id]);
+    await run(`UPDATE viagens SET status = 'cancelada' WHERE id = $1 AND empresa_id = $2`, [id, empresaId]);
     // Devolve as NFs não entregues ao estado "importada".
     await run(
       `UPDATE notas_fiscais SET status = 'importada'
@@ -366,17 +376,17 @@ export async function cancelar(id: string): Promise<Viagem> {
       [id],
     );
 
-    return getViagemComParadas(run, id);
+    return getViagemComParadas(run, empresaId, id);
   });
 }
 
 // ---------------------------------------------------------------------
 // Paradas
 // ---------------------------------------------------------------------
-export async function addParada(viagemId: string, input: AddParadaInput): Promise<Parada> {
+export async function addParada(empresaId: string, viagemId: string, input: AddParadaInput): Promise<Parada> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
-    const viagem = await fetchViagemRow(run, viagemId);
+    const viagem = await fetchViagemRow(run, empresaId, viagemId);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
     if (viagem.status !== 'em_andamento') {
       throw AppError.badRequest('Só é possível adicionar paradas a viagens em andamento');
@@ -393,6 +403,7 @@ export async function addParada(viagemId: string, input: AddParadaInput): Promis
 
     await alocarNfComoParada(
       run,
+      empresaId,
       viagemId,
       input.nf_id,
       ordem,
@@ -407,6 +418,7 @@ export async function addParada(viagemId: string, input: AddParadaInput): Promis
 }
 
 export async function updateParada(
+  empresaId: string,
   viagemId: string,
   paradaId: string,
   input: UpdateParadaInput,
@@ -414,8 +426,8 @@ export async function updateParada(
   return withTransaction(async (client) => {
     const run = clientRunner(client);
     const existentes = await run<{ id: string; nf_id: string | null; status: string }>(
-      'SELECT id, nf_id, status FROM paradas WHERE id = $1 AND viagem_id = $2',
-      [paradaId, viagemId],
+      'SELECT id, nf_id, status FROM paradas WHERE id = $1 AND viagem_id = $2 AND empresa_id = $3',
+      [paradaId, viagemId, empresaId],
     );
     const parada = existentes[0];
     if (!parada) throw AppError.notFound('Parada não encontrada nesta viagem');
@@ -440,12 +452,15 @@ export async function updateParada(
     }
 
     if (sets.length > 0) {
-      values.push(paradaId);
-      await run(`UPDATE paradas SET ${sets.join(', ')} WHERE id = $${i}`, values);
+      values.push(paradaId, empresaId);
+      await run(`UPDATE paradas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`, values);
     }
 
     if (input.status === 'entregue' && parada.nf_id) {
-      await run(`UPDATE notas_fiscais SET status = 'entregue' WHERE id = $1`, [parada.nf_id]);
+      await run(`UPDATE notas_fiscais SET status = 'entregue' WHERE id = $1 AND empresa_id = $2`, [
+        parada.nf_id,
+        empresaId,
+      ]);
     }
 
     const paradas = await fetchParadas(run, viagemId);
@@ -453,12 +468,12 @@ export async function updateParada(
   });
 }
 
-export async function removeParada(viagemId: string, paradaId: string): Promise<void> {
+export async function removeParada(empresaId: string, viagemId: string, paradaId: string): Promise<void> {
   await withTransaction(async (client) => {
     const run = clientRunner(client);
     const rows = await run<{ nf_id: string | null }>(
-      'DELETE FROM paradas WHERE id = $1 AND viagem_id = $2 RETURNING nf_id',
-      [paradaId, viagemId],
+      'DELETE FROM paradas WHERE id = $1 AND viagem_id = $2 AND empresa_id = $3 RETURNING nf_id',
+      [paradaId, viagemId, empresaId],
     );
     if (!rows[0]) throw AppError.notFound('Parada não encontrada nesta viagem');
 
@@ -466,8 +481,8 @@ export async function removeParada(viagemId: string, paradaId: string): Promise<
     if (rows[0].nf_id) {
       await run(
         `UPDATE notas_fiscais SET status = 'importada'
-         WHERE id = $1 AND status IN ('alocada', 'em_viagem')`,
-        [rows[0].nf_id],
+         WHERE id = $1 AND empresa_id = $2 AND status IN ('alocada', 'em_viagem')`,
+        [rows[0].nf_id, empresaId],
       );
     }
   });

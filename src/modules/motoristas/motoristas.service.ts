@@ -1,6 +1,8 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
 import { hashPassword } from '../../utils/password';
+import { signDeviceToken } from '../../utils/jwt';
+import { env } from '../../config/env';
 import type { CreateMotoristaInput, UpdateMotoristaInput } from './motoristas.schemas';
 
 // Colunas públicas (nunca devolvemos senha_hash). tem_senha indica se há acesso ao app.
@@ -23,14 +25,17 @@ export interface Motorista {
   updated_at: string;
 }
 
-export function list(): Promise<Motorista[]> {
-  return query<Motorista>(`SELECT ${PUBLIC_COLS} FROM motoristas ORDER BY nome`);
+export function list(empresaId: string): Promise<Motorista[]> {
+  return query<Motorista>(
+    `SELECT ${PUBLIC_COLS} FROM motoristas WHERE empresa_id = $1 ORDER BY nome`,
+    [empresaId],
+  );
 }
 
-export async function getById(id: string): Promise<Motorista> {
+export async function getById(empresaId: string, id: string): Promise<Motorista> {
   const row = await queryOne<Motorista>(
-    `SELECT ${PUBLIC_COLS} FROM motoristas WHERE id = $1`,
-    [id],
+    `SELECT ${PUBLIC_COLS} FROM motoristas WHERE id = $1 AND empresa_id = $2`,
+    [id, empresaId],
   );
   if (!row) {
     throw AppError.notFound('Motorista não encontrado');
@@ -38,14 +43,15 @@ export async function getById(id: string): Promise<Motorista> {
   return row;
 }
 
-export async function create(input: CreateMotoristaInput): Promise<Motorista> {
+export async function create(empresaId: string, input: CreateMotoristaInput): Promise<Motorista> {
   const senhaHash = input.senha ? await hashPassword(input.senha) : null;
   const row = await queryOne<Motorista>(
     `INSERT INTO motoristas
-       (nome, cpf, cnh, categoria_cnh, validade_cnh, telefone, senha_hash, ativo)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, TRUE))
+       (empresa_id, nome, cpf, cnh, categoria_cnh, validade_cnh, telefone, senha_hash, ativo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, TRUE))
      RETURNING ${PUBLIC_COLS}`,
     [
+      empresaId,
       input.nome,
       input.cpf,
       input.cnh ?? null,
@@ -59,9 +65,9 @@ export async function create(input: CreateMotoristaInput): Promise<Motorista> {
   return row!;
 }
 
-export async function update(id: string, input: UpdateMotoristaInput): Promise<Motorista> {
+export async function update(empresaId: string, id: string, input: UpdateMotoristaInput): Promise<Motorista> {
   // Garante que existe (e dá 404 claro antes de montar o UPDATE).
-  await getById(id);
+  await getById(empresaId, id);
 
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -82,22 +88,45 @@ export async function update(id: string, input: UpdateMotoristaInput): Promise<M
   if (input.senha !== undefined) assign('senha_hash', await hashPassword(input.senha));
 
   if (sets.length === 0) {
-    return getById(id);
+    return getById(empresaId, id);
   }
 
-  values.push(id);
+  values.push(id, empresaId);
   const row = await queryOne<Motorista>(
-    `UPDATE motoristas SET ${sets.join(', ')} WHERE id = $${i} RETURNING ${PUBLIC_COLS}`,
+    `UPDATE motoristas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${PUBLIC_COLS}`,
     values,
   );
   return row!;
 }
 
-export async function remove(id: string): Promise<void> {
+// Emite um token de dispositivo (long-lived) para o motorista usar em apps de
+// rastreio GPS em 2º plano. Exige que o motorista esteja ativo.
+export async function gerarDeviceToken(
+  empresaId: string,
+  id: string,
+): Promise<{ deviceToken: string; validade: string; motorista: { id: string; nome: string } }> {
+  const motorista = await getById(empresaId, id);
+  if (!motorista.ativo) {
+    throw AppError.badRequest('Motorista inativo não pode receber token de dispositivo');
+  }
+  const deviceToken = signDeviceToken({
+    sub: motorista.id,
+    tipo: 'motorista',
+    empresaId,
+    cpf: motorista.cpf,
+  });
+  return {
+    deviceToken,
+    validade: env.jwt.deviceTtl,
+    motorista: { id: motorista.id, nome: motorista.nome },
+  };
+}
+
+export async function remove(empresaId: string, id: string): Promise<void> {
   // Soft delete: motoristas têm histórico (viagens, multas) e não devem sumir.
   const row = await queryOne<{ id: string }>(
-    'UPDATE motoristas SET ativo = FALSE WHERE id = $1 RETURNING id',
-    [id],
+    'UPDATE motoristas SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
+    [id, empresaId],
   );
   if (!row) {
     throw AppError.notFound('Motorista não encontrado');

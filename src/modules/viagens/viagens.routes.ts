@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
-import { requireAuth, requireUsuario } from '../../middleware/auth';
+import { requireAuth, requireUsuario, tenantId } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import {
   addParadaSchema,
@@ -26,7 +26,7 @@ viagensRouter.get(
   '/',
   validate({ query: listViagensQuerySchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.list(req.query as unknown as ListViagensQuery));
+    res.json(await service.list(tenantId(req), req.query as unknown as ListViagensQuery));
   }),
 );
 
@@ -34,7 +34,7 @@ viagensRouter.get(
   '/:id',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.getById(req.params.id!));
+    res.json(await service.getById(tenantId(req), req.params.id!));
   }),
 );
 
@@ -42,7 +42,7 @@ viagensRouter.post(
   '/',
   validate({ body: createViagemSchema }),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await service.create(req.body));
+    res.status(201).json(await service.create(tenantId(req), req.body));
   }),
 );
 
@@ -50,7 +50,7 @@ viagensRouter.patch(
   '/:id',
   validate({ params: idParamSchema, body: updateViagemSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.update(req.params.id!, req.body));
+    res.json(await service.update(tenantId(req), req.params.id!, req.body));
   }),
 );
 
@@ -59,7 +59,7 @@ viagensRouter.get(
   '/:id/posicoes',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await gpsService.getTrajetoria(req.params.id!));
+    res.json(await gpsService.getTrajetoria(tenantId(req), req.params.id!));
   }),
 );
 
@@ -67,7 +67,7 @@ viagensRouter.get(
   '/:id/alertas',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await alertasService.listByViagem(req.params.id!));
+    res.json(await alertasService.listByViagem(tenantId(req), req.params.id!));
   }),
 );
 
@@ -76,7 +76,7 @@ viagensRouter.post(
   '/:id/iniciar',
   validate({ params: idParamSchema, body: iniciarViagemSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.iniciar(req.params.id!, req.body));
+    res.json(await service.iniciar(tenantId(req), req.params.id!, req.body));
   }),
 );
 
@@ -84,7 +84,7 @@ viagensRouter.post(
   '/:id/encerrar',
   validate({ params: idParamSchema, body: encerrarViagemSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.encerrar(req.params.id!, req.body));
+    res.json(await service.encerrar(tenantId(req), req.params.id!, req.body));
   }),
 );
 
@@ -92,7 +92,7 @@ viagensRouter.post(
   '/:id/cancelar',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.cancelar(req.params.id!));
+    res.json(await service.cancelar(tenantId(req), req.params.id!));
   }),
 );
 
@@ -101,7 +101,7 @@ viagensRouter.post(
   '/:id/paradas',
   validate({ params: idParamSchema, body: addParadaSchema }),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await service.addParada(req.params.id!, req.body));
+    res.status(201).json(await service.addParada(tenantId(req), req.params.id!, req.body));
   }),
 );
 
@@ -109,7 +109,7 @@ viagensRouter.patch(
   '/:id/paradas/:paradaId',
   validate({ params: paradaParamsSchema, body: updateParadaSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.updateParada(req.params.id!, req.params.paradaId!, req.body));
+    res.json(await service.updateParada(tenantId(req), req.params.id!, req.params.paradaId!, req.body));
   }),
 );
 
@@ -117,7 +117,7 @@ viagensRouter.delete(
   '/:id/paradas/:paradaId',
   validate({ params: paradaParamsSchema }),
   asyncHandler(async (req, res) => {
-    await service.removeParada(req.params.id!, req.params.paradaId!);
+    await service.removeParada(tenantId(req), req.params.id!, req.params.paradaId!);
     res.status(204).send();
   }),
 );

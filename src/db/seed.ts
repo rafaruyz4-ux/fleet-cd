@@ -2,8 +2,20 @@ import { env } from '../config/env';
 import { hashPassword } from '../utils/password';
 import { pool, queryOne } from './pool';
 
-/** Cria o usuário admin inicial (idempotente) a partir das variáveis SEED_ADMIN_*. */
+// Empresa padrão (mesma UUID fixa da migration 003) — dona dos dados iniciais.
+const EMPRESA_PADRAO_ID = '00000000-0000-0000-0000-000000000001';
+
+/** Cria a empresa padrão e o usuário admin inicial (idempotente). */
 async function seed(): Promise<void> {
+  // Garante a empresa padrão (a migration 003 já a cria; isto cobre bancos
+  // antigos e deixa o seed autossuficiente).
+  await pool.query(
+    `INSERT INTO empresas (id, nome, slug, plano)
+     VALUES ($1, 'Empresa Padrão', 'padrao', 'ativo')
+     ON CONFLICT (id) DO NOTHING`,
+    [EMPRESA_PADRAO_ID],
+  );
+
   const existing = await queryOne<{ id: string }>(
     'SELECT id FROM usuarios WHERE email = $1',
     [env.seedAdmin.email],
@@ -16,9 +28,9 @@ async function seed(): Promise<void> {
 
   const senhaHash = await hashPassword(env.seedAdmin.senha);
   await pool.query(
-    `INSERT INTO usuarios (nome, email, senha_hash, papel)
-     VALUES ($1, $2, $3, 'admin')`,
-    [env.seedAdmin.nome, env.seedAdmin.email, senhaHash],
+    `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id)
+     VALUES ($1, $2, $3, 'admin', $4)`,
+    [env.seedAdmin.nome, env.seedAdmin.email, senhaHash, EMPRESA_PADRAO_ID],
   );
 
   console.log(`[seed] usuário admin criado: ${env.seedAdmin.email}`);

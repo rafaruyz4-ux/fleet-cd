@@ -18,6 +18,7 @@ interface UsuarioRow {
   email: string;
   senha_hash: string;
   papel: 'admin' | 'gestor';
+  empresa_id: string;
   ativo: boolean;
 }
 
@@ -39,12 +40,12 @@ function usuarioToPublico(row: UsuarioRow): UsuarioPublico {
 }
 
 function usuarioPayload(row: UsuarioRow): UsuarioTokenPayload {
-  return { sub: row.id, tipo: 'usuario', email: row.email, papel: row.papel };
+  return { sub: row.id, tipo: 'usuario', empresaId: row.empresa_id, email: row.email, papel: row.papel };
 }
 
 export async function login(email: string, senha: string): Promise<UsuarioAuthResult> {
   const usuario = await queryOne<UsuarioRow>(
-    'SELECT id, nome, email, senha_hash, papel, ativo FROM usuarios WHERE email = $1',
+    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo FROM usuarios WHERE email = $1',
     [email.toLowerCase()],
   );
 
@@ -68,7 +69,7 @@ export async function login(email: string, senha: string): Promise<UsuarioAuthRe
 
 export async function getById(id: string): Promise<UsuarioPublico> {
   const usuario = await queryOne<UsuarioRow>(
-    'SELECT id, nome, email, senha_hash, papel, ativo FROM usuarios WHERE id = $1',
+    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo FROM usuarios WHERE id = $1',
     [id],
   );
   if (!usuario) {
@@ -85,6 +86,7 @@ interface MotoristaAuthRow {
   nome: string;
   cpf: string;
   senha_hash: string | null;
+  empresa_id: string;
   ativo: boolean;
 }
 
@@ -102,8 +104,8 @@ interface MotoristaAuthResult {
   refreshToken: string;
 }
 
-function motoristaPayload(row: { id: string; cpf: string }): MotoristaTokenPayload {
-  return { sub: row.id, tipo: 'motorista', cpf: row.cpf };
+function motoristaPayload(row: { id: string; cpf: string; empresa_id: string }): MotoristaTokenPayload {
+  return { sub: row.id, tipo: 'motorista', empresaId: row.empresa_id, cpf: row.cpf };
 }
 
 // Normaliza CPF para só dígitos (a coluna pode estar com ou sem pontuação).
@@ -112,7 +114,7 @@ const CPF_DIGITS = `regexp_replace(cpf, '\\D', '', 'g')`;
 export async function loginMotorista(cpf: string, senha: string): Promise<MotoristaAuthResult> {
   const cpfDigits = cpf.replace(/\D/g, '');
   const motorista = await queryOne<MotoristaAuthRow>(
-    `SELECT id, nome, cpf, senha_hash, ativo FROM motoristas WHERE ${CPF_DIGITS} = $1`,
+    `SELECT id, nome, cpf, senha_hash, empresa_id, ativo FROM motoristas WHERE ${CPF_DIGITS} = $1`,
     [cpfDigits],
   );
 
@@ -157,8 +159,8 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
   }
 
   if (payload.tipo === 'motorista') {
-    const row = await queryOne<{ id: string; cpf: string; senha_hash: string | null; ativo: boolean }>(
-      'SELECT id, cpf, senha_hash, ativo FROM motoristas WHERE id = $1',
+    const row = await queryOne<{ id: string; cpf: string; senha_hash: string | null; empresa_id: string; ativo: boolean }>(
+      'SELECT id, cpf, senha_hash, empresa_id, ativo FROM motoristas WHERE id = $1',
       [payload.sub],
     );
     if (!row || !row.ativo || !row.senha_hash) {
@@ -168,7 +170,7 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
   }
 
   const usuario = await queryOne<UsuarioRow>(
-    'SELECT id, nome, email, senha_hash, papel, ativo FROM usuarios WHERE id = $1',
+    'SELECT id, nome, email, senha_hash, papel, empresa_id, ativo FROM usuarios WHERE id = $1',
     [payload.sub],
   );
   if (!usuario || !usuario.ativo) {

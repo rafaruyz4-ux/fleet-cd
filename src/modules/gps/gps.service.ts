@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
-import type { IngestPosicoesInput, PosicaoInput } from './gps.schemas';
+import { ingestPosicoesSchema, type IngestPosicoesInput, type PosicaoInput } from './gps.schemas';
 
 // ---------------------------------------------------------------------
 // Limiares de detecção (constantes; podem virar configuráveis depois).
@@ -50,6 +50,7 @@ function distanciaM(a: Ponto, b: Ponto): number {
 
 async function inserirAlerta(
   client: PoolClient,
+  empresaId: string,
   viagemId: string,
   tipo: AlertaTipo,
   descricao: string,
@@ -65,13 +66,13 @@ async function inserirAlerta(
     criado_em: string;
     visualizado: boolean;
   }>(
-    `INSERT INTO alertas (viagem_id, tipo, descricao, coordenada)
-     VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography)
+    `INSERT INTO alertas (empresa_id, viagem_id, tipo, descricao, coordenada)
+     VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326)::geography)
      RETURNING id, viagem_id, tipo, descricao,
                ST_Y(coordenada::geometry) AS lat,
                ST_X(coordenada::geometry) AS lng,
                criado_em, visualizado`,
-    [viagemId, tipo, descricao, ponto.lng, ponto.lat],
+    [empresaId, viagemId, tipo, descricao, ponto.lng, ponto.lat],
   );
   const r = result.rows[0]!;
   return {
@@ -86,6 +87,7 @@ async function inserirAlerta(
 }
 
 export async function ingestPosicoes(
+  empresaId: string,
   viagemId: string,
   motoristaId: string,
   input: IngestPosicoesInput,
@@ -95,7 +97,10 @@ export async function ingestPosicoes(
       motorista_id: string;
       status: string;
       rota_planejada_id: string | null;
-    }>('SELECT motorista_id, status, rota_planejada_id FROM viagens WHERE id = $1', [viagemId]);
+    }>('SELECT motorista_id, status, rota_planejada_id FROM viagens WHERE id = $1 AND empresa_id = $2', [
+      viagemId,
+      empresaId,
+    ]);
     const viagem = viagemRows.rows[0];
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
     if (viagem.motorista_id !== motoristaId) {
@@ -155,9 +160,9 @@ export async function ingestPosicoes(
       const ponto: Ponto = { lat: p.lat, lng: p.lng, time };
 
       await client.query(
-        `INSERT INTO posicoes_gps (viagem_id, coordenada, velocidade_kmh, precisao_m, registrado_em)
-         VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $5, $6)`,
-        [viagemId, p.lng, p.lat, p.velocidade_kmh ?? null, p.precisao_m ?? null, p.registrado_em],
+        `INSERT INTO posicoes_gps (empresa_id, viagem_id, coordenada, velocidade_kmh, precisao_m, registrado_em)
+         VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography, $5, $6, $7)`,
+        [empresaId, viagemId, p.lng, p.lat, p.velocidade_kmh ?? null, p.precisao_m ?? null, p.registrado_em],
       );
       inseridas++;
 
@@ -217,7 +222,7 @@ export async function ingestPosicoes(
       // Aplica cooldown por tipo e grava os que sobrarem.
       for (const c of candidatos) {
         if (time - ultimoAlerta[c.tipo] >= COOLDOWN_MS) {
-          alertas.push(await inserirAlerta(client, viagemId, c.tipo, c.descricao, p));
+          alertas.push(await inserirAlerta(client, empresaId, viagemId, c.tipo, c.descricao, p));
           ultimoAlerta[c.tipo] = time;
         }
       }
@@ -227,6 +232,67 @@ export async function ingestPosicoes(
 
     return { inseridas, alertas };
   });
+}
+
+// Ingestão "sem ID": resolve a viagem em_andamento do próprio motorista e
+// delega para ingestPosicoes. Usado por apps de rastreio em 2º plano (GPSLogger),
+// que postam numa URL fixa sem saber o id da viagem.
+export async function ingestPosicoesViagemAtual(
+  empresaId: string,
+  motoristaId: string,
+  input: IngestPosicoesInput,
+): Promise<IngestResult> {
+  const viagem = await queryOne<{ id: string }>(
+    `SELECT id FROM viagens
+     WHERE empresa_id = $1 AND motorista_id = $2 AND status = 'em_andamento'
+     ORDER BY iniciada_em DESC NULLS LAST
+     LIMIT 1`,
+    [empresaId, motoristaId],
+  );
+  if (!viagem) {
+    throw AppError.badRequest(
+      'Nenhuma viagem em andamento para este motorista. Inicie uma viagem no dashboard.',
+    );
+  }
+  return ingestPosicoes(empresaId, viagem.id, motoristaId, input);
+}
+
+// Adaptador Overland (app iOS de rastreio em 2º plano). Overland posta um
+// FeatureCollection GeoJSON ({locations:[{geometry:{coordinates:[lng,lat]},
+// properties:{timestamp,horizontal_accuracy,speed}}]}) e não permite header
+// Authorization. Convertemos para o nosso formato e gravamos na viagem em_andamento.
+interface OverlandFeature {
+  geometry?: { coordinates?: number[] };
+  properties?: { timestamp?: string; horizontal_accuracy?: number; speed?: number };
+}
+
+export async function ingestOverland(
+  empresaId: string,
+  motoristaId: string,
+  body: { locations?: OverlandFeature[] },
+): Promise<IngestResult> {
+  const feats = Array.isArray(body?.locations) ? body.locations : [];
+  const brutas = feats
+    .map((f) => {
+      const c = f.geometry?.coordinates;
+      const ts = f.properties?.timestamp;
+      if (!c || c.length < 2 || !ts) return null;
+      const p: Record<string, unknown> = { lat: c[1], lng: c[0], registrado_em: ts };
+      const acc = f.properties?.horizontal_accuracy;
+      if (typeof acc === 'number' && acc >= 0) p.precisao_m = acc;
+      const spd = f.properties?.speed;
+      if (typeof spd === 'number' && spd >= 0) {
+        p.velocidade_kmh = Math.min(999, Math.round(spd * 3.6 * 10) / 10);
+      }
+      return p;
+    })
+    .filter((p): p is Record<string, unknown> => p !== null);
+
+  // Overland envia pings sem posições; nesse caso só confirmamos.
+  if (brutas.length === 0) return { inseridas: 0, alertas: [] };
+
+  const parsed = ingestPosicoesSchema.parse({ posicoes: brutas });
+  return ingestPosicoesViagemAtual(empresaId, motoristaId, parsed);
 }
 
 // ---------------------------------------------------------------------
@@ -242,9 +308,13 @@ export interface PontoTrajeto {
 }
 
 export async function getTrajetoria(
+  empresaId: string,
   viagemId: string,
 ): Promise<{ viagem_id: string; total: number; pontos: PontoTrajeto[] }> {
-  const existe = await queryOne<{ id: string }>('SELECT id FROM viagens WHERE id = $1', [viagemId]);
+  const existe = await queryOne<{ id: string }>(
+    'SELECT id FROM viagens WHERE id = $1 AND empresa_id = $2',
+    [viagemId, empresaId],
+  );
   if (!existe) throw AppError.notFound('Viagem não encontrada');
 
   const rows = await query<{
@@ -257,8 +327,8 @@ export async function getTrajetoria(
   }>(
     `SELECT ST_Y(coordenada::geometry) AS lat, ST_X(coordenada::geometry) AS lng,
             velocidade_kmh, precisao_m, registrado_em, recebido_em
-     FROM posicoes_gps WHERE viagem_id = $1 ORDER BY registrado_em`,
-    [viagemId],
+     FROM posicoes_gps WHERE viagem_id = $1 AND empresa_id = $2 ORDER BY registrado_em`,
+    [viagemId, empresaId],
   );
 
   const pontos: PontoTrajeto[] = rows.map((r) => ({
@@ -282,14 +352,14 @@ export interface MinhaViagem {
   paradas_count: number;
 }
 
-export async function getMinhasViagens(motoristaId: string): Promise<MinhaViagem[]> {
+export async function getMinhasViagens(empresaId: string, motoristaId: string): Promise<MinhaViagem[]> {
   return query<MinhaViagem>(
     `SELECT v.id, v.status, ve.placa AS veiculo_placa, v.iniciada_em, v.criado_em,
             (SELECT COUNT(*)::int FROM paradas WHERE viagem_id = v.id) AS paradas_count
      FROM viagens v
      JOIN veiculos ve ON ve.id = v.veiculo_id
-     WHERE v.motorista_id = $1
+     WHERE v.empresa_id = $1 AND v.motorista_id = $2
      ORDER BY (v.status = 'em_andamento') DESC, v.criado_em DESC`,
-    [motoristaId],
+    [empresaId, motoristaId],
   );
 }

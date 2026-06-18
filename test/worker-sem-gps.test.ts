@@ -48,8 +48,8 @@ describe('worker — detecção de sem_gps', () => {
     const viagem = await viagemIniciadaEm(minAtras(30));
     // posição recebida há 2 min → contato recente, mesmo com a viagem iniciada há 30
     await pool.query(
-      `INSERT INTO posicoes_gps (viagem_id, coordenada, registrado_em, recebido_em)
-       VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $4)`,
+      `INSERT INTO posicoes_gps (empresa_id, viagem_id, coordenada, registrado_em, recebido_em)
+       VALUES ('00000000-0000-0000-0000-000000000001', $1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $4)`,
       [viagem, -46.6, -23.5, minAtras(2)],
     );
     const novos = await detectarSemGps(10);

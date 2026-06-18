@@ -10,7 +10,7 @@ import { parseNfeXml } from './parser';
  * cadastro manual e cria a NF + itens (reusa nfs.service.create, incl. a
  * deduplicação por chave de acesso → 409 se a NF já foi importada).
  */
-export async function importarNfeXml(xml: string): Promise<Nf> {
+export async function importarNfeXml(empresaId: string, xml: string): Promise<Nf> {
   const parsed = parseNfeXml(xml);
 
   // Passa pelos mesmos schemas do POST /nfs para garantir consistência.
@@ -36,5 +36,5 @@ export async function importarNfeXml(xml: string): Promise<Nf> {
     throw err;
   }
 
-  return nfsService.create(input);
+  return nfsService.create(empresaId, input);
 }

@@ -109,10 +109,10 @@ export interface ListNfsResult {
   offset: number;
 }
 
-export async function list(q: ListNfsQuery): Promise<ListNfsResult> {
-  const where: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
+export async function list(empresaId: string, q: ListNfsQuery): Promise<ListNfsResult> {
+  const where: string[] = ['empresa_id = $1'];
+  const values: unknown[] = [empresaId];
+  let i = 2;
 
   if (q.status) {
     where.push(`status = $${i++}`);
@@ -177,10 +177,10 @@ async function fetchItensTx(client: PoolClient, nfId: string): Promise<ItemNf[]>
   return result.rows.map(toItem);
 }
 
-export async function getById(id: string): Promise<Nf> {
+export async function getById(empresaId: string, id: string): Promise<Nf> {
   const row = await queryOne<NfRow>(
-    `SELECT ${SELECT_COLS} FROM notas_fiscais WHERE id = $1`,
-    [id],
+    `SELECT ${SELECT_COLS} FROM notas_fiscais WHERE id = $1 AND empresa_id = $2`,
+    [id, empresaId],
   );
   if (!row) {
     throw AppError.notFound('Nota fiscal não encontrada');
@@ -192,14 +192,16 @@ export async function getById(id: string): Promise<Nf> {
 
 async function insertItens(
   client: PoolClient,
+  empresaId: string,
   nfId: string,
   itens: ItemNfInput[],
 ): Promise<void> {
   for (const item of itens) {
     await client.query(
-      `INSERT INTO itens_nf (nf_id, codigo, descricao, quantidade, unidade, valor_unitario)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO itens_nf (empresa_id, nf_id, codigo, descricao, quantidade, unidade, valor_unitario)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
+        empresaId,
         nfId,
         item.codigo ?? null,
         item.descricao ?? null,
@@ -211,8 +213,9 @@ async function insertItens(
   }
 }
 
-export async function create(input: CreateNfInput): Promise<Nf> {
+export async function create(empresaId: string, input: CreateNfInput): Promise<Nf> {
   const values: unknown[] = [
+    empresaId,
     input.chave_acesso,
     input.numero ?? null,
     input.serie ?? null,
@@ -238,18 +241,18 @@ export async function create(input: CreateNfInput): Promise<Nf> {
     return await withTransaction(async (client) => {
       const result = await client.query<NfRow>(
         `INSERT INTO notas_fiscais
-           (chave_acesso, numero, serie, cfop, emitida_em,
+           (empresa_id, chave_acesso, numero, serie, cfop, emitida_em,
             destinatario_cnpj, destinatario_nome, destinatario_endereco,
             unidade_propria_id, valor_total, peso_kg, xml_path,
             status, coordenada)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                 COALESCE($13, 'importada'), ${coordExpr})
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                 COALESCE($14, 'importada'), ${coordExpr})
          RETURNING ${SELECT_COLS}`,
         values,
       );
       const nf = toNf(result.rows[0]!);
       if (input.itens?.length) {
-        await insertItens(client, nf.id, input.itens);
+        await insertItens(client, empresaId, nf.id, input.itens);
         nf.itens = await fetchItensTx(client, nf.id);
       } else {
         nf.itens = [];
@@ -264,8 +267,8 @@ export async function create(input: CreateNfInput): Promise<Nf> {
   }
 }
 
-export async function update(id: string, input: UpdateNfInput): Promise<Nf> {
-  await getById(id);
+export async function update(empresaId: string, id: string, input: UpdateNfInput): Promise<Nf> {
+  await getById(empresaId, id);
 
   return withTransaction(async (client) => {
     const sets: string[] = [];
@@ -305,9 +308,9 @@ export async function update(id: string, input: UpdateNfInput): Promise<Nf> {
     }
 
     if (sets.length > 0) {
-      values.push(id);
+      values.push(id, empresaId);
       await client.query(
-        `UPDATE notas_fiscais SET ${sets.join(', ')} WHERE id = $${i}`,
+        `UPDATE notas_fiscais SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`,
         values,
       );
     }
@@ -316,13 +319,13 @@ export async function update(id: string, input: UpdateNfInput): Promise<Nf> {
     if (input.itens !== undefined) {
       await client.query('DELETE FROM itens_nf WHERE nf_id = $1', [id]);
       if (input.itens.length) {
-        await insertItens(client, id, input.itens);
+        await insertItens(client, empresaId, id, input.itens);
       }
     }
 
     const row = await client.query<NfRow>(
-      `SELECT ${SELECT_COLS} FROM notas_fiscais WHERE id = $1`,
-      [id],
+      `SELECT ${SELECT_COLS} FROM notas_fiscais WHERE id = $1 AND empresa_id = $2`,
+      [id, empresaId],
     );
     const nf = toNf(row.rows[0]!);
     nf.itens = await fetchItensTx(client, id);
@@ -330,11 +333,11 @@ export async function update(id: string, input: UpdateNfInput): Promise<Nf> {
   });
 }
 
-export async function remove(id: string): Promise<void> {
+export async function remove(empresaId: string, id: string): Promise<void> {
   // Hard delete: itens_nf cai por CASCADE; paradas ficam com nf_id = NULL.
   const row = await queryOne<{ id: string }>(
-    'DELETE FROM notas_fiscais WHERE id = $1 RETURNING id',
-    [id],
+    'DELETE FROM notas_fiscais WHERE id = $1 AND empresa_id = $2 RETURNING id',
+    [id, empresaId],
   );
   if (!row) {
     throw AppError.notFound('Nota fiscal não encontrada');

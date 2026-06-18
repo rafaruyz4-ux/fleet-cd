@@ -12,6 +12,18 @@ declare global {
   }
 }
 
+/**
+ * Devolve o id da empresa (tenant) do principal autenticado.
+ * É a chave de isolamento: TODA query de domínio deve filtrar por este id.
+ * Lança 401 se não houver principal (rota sem requireAuth antes).
+ */
+export function tenantId(req: Request): string {
+  if (!req.user) {
+    throw AppError.unauthorized();
+  }
+  return req.user.empresaId;
+}
+
 /** Exige um access token JWT válido no header Authorization: Bearer <token>. */
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
   const header = req.headers.authorization;

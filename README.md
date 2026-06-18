@@ -276,6 +276,15 @@ npm test
 
 ## Decisões / notas
 
+- **Multi-tenant (SaaS):** cada cliente é uma `empresa` (migration `003`). Toda
+  tabela de domínio tem `empresa_id` e **toda** consulta filtra por ele — o token
+  JWT carrega a empresa do principal (gestor ou motorista) e o helper
+  `tenantId(req)` (em `middleware/auth.ts`) é a fonte desse id nas rotas. Placa,
+  CNPJ de unidade, chave da NF e nº do auto de multa são únicos **por empresa**;
+  CPF de motorista e e-mail de usuário seguem únicos globalmente (são credenciais
+  de login). Os dados pré-multi-tenant foram migrados para a "Empresa Padrão"
+  (`00000000-0000-0000-0000-000000000001`). O isolamento é coberto por
+  `test/tenant-isolation.test.ts`.
 - **`usuarios`** (gestores do dashboard) foi adicionada ao modelo original para
   autenticar o acesso ao dashboard. O login do **motorista** (CPF + senha, no
   app Android) foi entregue na Sprint 4 e usa a coluna `senha_hash` de

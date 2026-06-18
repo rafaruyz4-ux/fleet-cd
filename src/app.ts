@@ -1,3 +1,4 @@
+import path from 'path';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -24,6 +25,15 @@ export function createApp() {
   // Healthcheck (sem autenticação).
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Página de teste do "app do motorista" (rastreio GPS pelo celular).
+  // Arquivos estáticos em /public servidos na mesma origem que /api (sem CORS);
+  // separados em .html/.css/.js para respeitar a CSP do helmet (default-src 'self').
+  const publicDir = path.join(__dirname, '..', 'public');
+  app.use(express.static(publicDir));
+  app.get('/motorista', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'motorista.html'));
   });
 
   app.use('/api', apiRouter);

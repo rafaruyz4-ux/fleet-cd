@@ -51,25 +51,32 @@ function toLinestringWkt(linha: { lat: number; lng: number }[]): string {
   return `SRID=4326;LINESTRING(${pts})`;
 }
 
-export async function list(): Promise<Rota[]> {
-  const rows = await query<RotaRow>(`SELECT ${SELECT_COLS} FROM rotas_planejadas ORDER BY nome NULLS LAST, criado_em DESC`);
+export async function list(empresaId: string): Promise<Rota[]> {
+  const rows = await query<RotaRow>(
+    `SELECT ${SELECT_COLS} FROM rotas_planejadas WHERE empresa_id = $1 ORDER BY nome NULLS LAST, criado_em DESC`,
+    [empresaId],
+  );
   return rows.map(toRota);
 }
 
-export async function getById(id: string): Promise<Rota> {
-  const row = await queryOne<RotaRow>(`SELECT ${SELECT_COLS} FROM rotas_planejadas WHERE id = $1`, [id]);
+export async function getById(empresaId: string, id: string): Promise<Rota> {
+  const row = await queryOne<RotaRow>(
+    `SELECT ${SELECT_COLS} FROM rotas_planejadas WHERE id = $1 AND empresa_id = $2`,
+    [id, empresaId],
+  );
   if (!row) throw AppError.notFound('Rota não encontrada');
   return toRota(row);
 }
 
-export async function create(input: CreateRotaInput): Promise<Rota> {
+export async function create(empresaId: string, input: CreateRotaInput): Promise<Rota> {
   const wkt = input.linha ? toLinestringWkt(input.linha) : null;
   const row = await queryOne<RotaRow>(
-    `INSERT INTO rotas_planejadas (tipo, nome, raio_tolerancia_m, duracao_estimada_min, linha)
-     VALUES ($1, $2, COALESCE($3, 200), $4,
-             CASE WHEN $5::text IS NULL THEN NULL ELSE ST_GeogFromText($5) END)
+    `INSERT INTO rotas_planejadas (empresa_id, tipo, nome, raio_tolerancia_m, duracao_estimada_min, linha)
+     VALUES ($1, $2, $3, COALESCE($4, 200), $5,
+             CASE WHEN $6::text IS NULL THEN NULL ELSE ST_GeogFromText($6) END)
      RETURNING ${SELECT_COLS}`,
     [
+      empresaId,
       input.tipo,
       input.nome ?? null,
       input.raio_tolerancia_m ?? null,
@@ -80,8 +87,8 @@ export async function create(input: CreateRotaInput): Promise<Rota> {
   return toRota(row!);
 }
 
-export async function update(id: string, input: UpdateRotaInput): Promise<Rota> {
-  await getById(id);
+export async function update(empresaId: string, id: string, input: UpdateRotaInput): Promise<Rota> {
+  await getById(empresaId, id);
 
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -104,20 +111,20 @@ export async function update(id: string, input: UpdateRotaInput): Promise<Rota> 
     i++;
   }
 
-  if (sets.length === 0) return getById(id);
+  if (sets.length === 0) return getById(empresaId, id);
 
-  values.push(id);
+  values.push(id, empresaId);
   const row = await queryOne<RotaRow>(
-    `UPDATE rotas_planejadas SET ${sets.join(', ')} WHERE id = $${i} RETURNING ${SELECT_COLS}`,
+    `UPDATE rotas_planejadas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${SELECT_COLS}`,
     values,
   );
   return toRota(row!);
 }
 
-export async function remove(id: string): Promise<void> {
+export async function remove(empresaId: string, id: string): Promise<void> {
   const row = await queryOne<{ id: string }>(
-    'DELETE FROM rotas_planejadas WHERE id = $1 RETURNING id',
-    [id],
+    'DELETE FROM rotas_planejadas WHERE id = $1 AND empresa_id = $2 RETURNING id',
+    [id, empresaId],
   );
   if (!row) throw AppError.notFound('Rota não encontrada');
 }

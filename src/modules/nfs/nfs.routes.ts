@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
-import { requireAuth, requireUsuario } from '../../middleware/auth';
+import { requireAuth, requireUsuario, tenantId } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import {
   consultarSefazSchema,
@@ -25,7 +25,7 @@ nfsRouter.post(
   '/importar',
   validate({ body: importarXmlSchema }),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await importarNfeXml(req.body.xml));
+    res.status(201).json(await importarNfeXml(tenantId(req), req.body.xml));
   }),
 );
 
@@ -35,7 +35,7 @@ nfsRouter.post(
   validate({ body: consultarSefazSchema }),
   asyncHandler(async (req, res) => {
     const xml = await consultarNfeXml(req.body.chave_acesso);
-    res.status(201).json(await importarNfeXml(xml));
+    res.status(201).json(await importarNfeXml(tenantId(req), xml));
   }),
 );
 
@@ -43,7 +43,7 @@ nfsRouter.get(
   '/',
   validate({ query: listNfsQuerySchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.list(req.query as unknown as ListNfsQuery));
+    res.json(await service.list(tenantId(req), req.query as unknown as ListNfsQuery));
   }),
 );
 
@@ -51,7 +51,7 @@ nfsRouter.get(
   '/:id',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.getById(req.params.id!));
+    res.json(await service.getById(tenantId(req), req.params.id!));
   }),
 );
 
@@ -59,7 +59,7 @@ nfsRouter.post(
   '/',
   validate({ body: createNfSchema }),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await service.create(req.body));
+    res.status(201).json(await service.create(tenantId(req), req.body));
   }),
 );
 
@@ -67,7 +67,7 @@ nfsRouter.patch(
   '/:id',
   validate({ params: idParamSchema, body: updateNfSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.update(req.params.id!, req.body));
+    res.json(await service.update(tenantId(req), req.params.id!, req.body));
   }),
 );
 
@@ -75,7 +75,7 @@ nfsRouter.delete(
   '/:id',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    await service.remove(req.params.id!);
+    await service.remove(tenantId(req), req.params.id!);
     res.status(204).send();
   }),
 );

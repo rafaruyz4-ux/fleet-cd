@@ -40,6 +40,9 @@ export const env = {
     refreshSecret: required('JWT_REFRESH_SECRET'),
     accessTtl: optional('JWT_ACCESS_TTL', '15m'),
     refreshTtl: optional('JWT_REFRESH_TTL', '7d'),
+    // Token de dispositivo (long-lived) usado por apps de rastreio em 2º plano
+    // que não fazem refresh (ex.: GPSLogger). Mesmo segredo do access token.
+    deviceTtl: optional('JWT_DEVICE_TTL', '365d'),
   },
 
   bcryptRounds: Number(optional('BCRYPT_ROUNDS', '12')),

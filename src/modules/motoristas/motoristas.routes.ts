@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
-import { requireAuth, requireUsuario } from '../../middleware/auth';
+import { requireAuth, requireUsuario, tenantId } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import {
   createMotoristaSchema,
@@ -16,8 +16,8 @@ motoristasRouter.use(requireAuth, requireUsuario);
 
 motoristasRouter.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    res.json(await service.list());
+  asyncHandler(async (req, res) => {
+    res.json(await service.list(tenantId(req)));
   }),
 );
 
@@ -25,7 +25,7 @@ motoristasRouter.get(
   '/:id',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.getById(req.params.id!));
+    res.json(await service.getById(tenantId(req), req.params.id!));
   }),
 );
 
@@ -33,7 +33,16 @@ motoristasRouter.post(
   '/',
   validate({ body: createMotoristaSchema }),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await service.create(req.body));
+    res.status(201).json(await service.create(tenantId(req), req.body));
+  }),
+);
+
+// Emite um token de dispositivo (validade longa) para rastreio GPS em 2º plano.
+motoristasRouter.post(
+  '/:id/device-token',
+  validate({ params: idParamSchema }),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await service.gerarDeviceToken(tenantId(req), req.params.id!));
   }),
 );
 
@@ -41,7 +50,7 @@ motoristasRouter.patch(
   '/:id',
   validate({ params: idParamSchema, body: updateMotoristaSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.update(req.params.id!, req.body));
+    res.json(await service.update(tenantId(req), req.params.id!, req.body));
   }),
 );
 
@@ -49,7 +58,7 @@ motoristasRouter.delete(
   '/:id',
   validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
-    await service.remove(req.params.id!);
+    await service.remove(tenantId(req), req.params.id!);
     res.status(204).send();
   }),
 );

@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { createApp } from '../src/app';
+import { pool } from '../src/db/pool';
 import { ADMIN_EMAIL, ADMIN_SENHA } from './config';
 
 export const app = createApp();
@@ -14,6 +16,26 @@ export function bearer(token: string): string {
 export async function loginGestor(): Promise<string> {
   const res = await api().post('/api/auth/login').send({ email: ADMIN_EMAIL, senha: ADMIN_SENHA });
   if (!res.body.accessToken) throw new Error(`login gestor falhou: ${res.status} ${JSON.stringify(res.body)}`);
+  return res.body.accessToken;
+}
+
+// Cria uma SEGUNDA empresa (tenant) com seu próprio gestor e devolve o token
+// dele — usado para testar o isolamento entre clientes. Insere direto no banco
+// (ainda não há cadastro self-service). E-mail único para não colidir.
+export async function criarEmpresaComGestor(senha = 'outra-senha-123'): Promise<string> {
+  const email = `gestor-${Date.now()}-${next()}@empresa.test`;
+  const hash = await bcrypt.hash(senha, 4);
+  const emp = await pool.query<{ id: string }>(
+    `INSERT INTO empresas (nome, plano) VALUES ($1, 'ativo') RETURNING id`,
+    [`Empresa ${email}`],
+  );
+  await pool.query(
+    `INSERT INTO usuarios (nome, email, senha_hash, papel, empresa_id)
+     VALUES ('Gestor Outro', $1, $2, 'admin', $3)`,
+    [email, hash, emp.rows[0]!.id],
+  );
+  const res = await api().post('/api/auth/login').send({ email, senha });
+  if (!res.body.accessToken) throw new Error(`login 2ª empresa falhou: ${res.status}`);
   return res.body.accessToken;
 }
 

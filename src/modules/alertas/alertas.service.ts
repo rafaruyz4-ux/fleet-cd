@@ -45,10 +45,10 @@ export interface ListAlertasResult {
   offset: number;
 }
 
-export async function list(q: ListAlertasQuery): Promise<ListAlertasResult> {
-  const where: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
+export async function list(empresaId: string, q: ListAlertasQuery): Promise<ListAlertasResult> {
+  const where: string[] = ['empresa_id = $1'];
+  const values: unknown[] = [empresaId];
+  let i = 2;
 
   if (q.visualizado !== undefined) {
     where.push(`visualizado = $${i++}`);
@@ -85,18 +85,18 @@ export async function list(q: ListAlertasQuery): Promise<ListAlertasResult> {
   };
 }
 
-export async function listByViagem(viagemId: string): Promise<Alerta[]> {
+export async function listByViagem(empresaId: string, viagemId: string): Promise<Alerta[]> {
   const rows = await query<AlertaRow>(
-    `SELECT ${SELECT_COLS} FROM alertas WHERE viagem_id = $1 ORDER BY criado_em DESC`,
-    [viagemId],
+    `SELECT ${SELECT_COLS} FROM alertas WHERE empresa_id = $1 AND viagem_id = $2 ORDER BY criado_em DESC`,
+    [empresaId, viagemId],
   );
   return rows.map(toAlerta);
 }
 
-export async function marcarVisualizado(id: string, visualizado: boolean): Promise<Alerta> {
+export async function marcarVisualizado(empresaId: string, id: string, visualizado: boolean): Promise<Alerta> {
   const row = await queryOne<AlertaRow>(
-    `UPDATE alertas SET visualizado = $1 WHERE id = $2 RETURNING ${SELECT_COLS}`,
-    [visualizado, id],
+    `UPDATE alertas SET visualizado = $1 WHERE id = $2 AND empresa_id = $3 RETURNING ${SELECT_COLS}`,
+    [visualizado, id, empresaId],
   );
   if (!row) throw AppError.notFound('Alerta não encontrado');
   return toAlerta(row);

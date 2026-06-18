@@ -43,17 +43,18 @@ function toUnidade(row: UnidadeRow): Unidade {
   };
 }
 
-export async function list(): Promise<Unidade[]> {
+export async function list(empresaId: string): Promise<Unidade[]> {
   const rows = await query<UnidadeRow>(
-    `SELECT ${SELECT_COLS} FROM unidades_proprias ORDER BY nome`,
+    `SELECT ${SELECT_COLS} FROM unidades_proprias WHERE empresa_id = $1 ORDER BY nome`,
+    [empresaId],
   );
   return rows.map(toUnidade);
 }
 
-export async function getById(id: string): Promise<Unidade> {
+export async function getById(empresaId: string, id: string): Promise<Unidade> {
   const row = await queryOne<UnidadeRow>(
-    `SELECT ${SELECT_COLS} FROM unidades_proprias WHERE id = $1`,
-    [id],
+    `SELECT ${SELECT_COLS} FROM unidades_proprias WHERE id = $1 AND empresa_id = $2`,
+    [id, empresaId],
   );
   if (!row) {
     throw AppError.notFound('Unidade não encontrada');
@@ -64,8 +65,9 @@ export async function getById(id: string): Promise<Unidade> {
 // SRID 4326 = WGS84 (lat/lng). ST_MakePoint recebe (X=lng, Y=lat).
 const POINT_EXPR = 'ST_SetSRID(ST_MakePoint($LNG, $LAT), 4326)::geography';
 
-export async function create(input: CreateUnidadeInput): Promise<Unidade> {
+export async function create(empresaId: string, input: CreateUnidadeInput): Promise<Unidade> {
   const values: unknown[] = [
+    empresaId,
     input.nome,
     input.cnpj ?? null,
     input.endereco ?? null,
@@ -83,16 +85,16 @@ export async function create(input: CreateUnidadeInput): Promise<Unidade> {
   }
 
   const row = await queryOne<UnidadeRow>(
-    `INSERT INTO unidades_proprias (nome, cnpj, endereco, janela_recebimento, ativo, coordenada)
-     VALUES ($1, $2, $3, $4, COALESCE($5, TRUE), ${coordExpr})
+    `INSERT INTO unidades_proprias (empresa_id, nome, cnpj, endereco, janela_recebimento, ativo, coordenada)
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6, TRUE), ${coordExpr})
      RETURNING ${SELECT_COLS}`,
     values,
   );
   return toUnidade(row!);
 }
 
-export async function update(id: string, input: UpdateUnidadeInput): Promise<Unidade> {
-  await getById(id);
+export async function update(empresaId: string, id: string, input: UpdateUnidadeInput): Promise<Unidade> {
+  await getById(empresaId, id);
 
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -120,21 +122,21 @@ export async function update(id: string, input: UpdateUnidadeInput): Promise<Uni
   }
 
   if (sets.length === 0) {
-    return getById(id);
+    return getById(empresaId, id);
   }
 
-  values.push(id);
+  values.push(id, empresaId);
   const row = await queryOne<UnidadeRow>(
-    `UPDATE unidades_proprias SET ${sets.join(', ')} WHERE id = $${i} RETURNING ${SELECT_COLS}`,
+    `UPDATE unidades_proprias SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${SELECT_COLS}`,
     values,
   );
   return toUnidade(row!);
 }
 
-export async function remove(id: string): Promise<void> {
+export async function remove(empresaId: string, id: string): Promise<void> {
   const row = await queryOne<{ id: string }>(
-    'UPDATE unidades_proprias SET ativo = FALSE WHERE id = $1 RETURNING id',
-    [id],
+    'UPDATE unidades_proprias SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
+    [id, empresaId],
   );
   if (!row) {
     throw AppError.notFound('Unidade não encontrada');

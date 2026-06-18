@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Rastreio do Motorista — Frota CD</title>
+    <link rel="stylesheet" href="/motorista.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="dot" id="conn-dot"></span>
+      <h1>Rastreio do Motorista</h1>
+    </header>
+
+    <main class="container">
+      <!-- LOGIN -->
+      <section id="view-login" class="card">
+        <h2>Entrar</h2>
+        <label for="cpf">CPF</label>
+        <input id="cpf" inputmode="numeric" autocomplete="username" placeholder="000.000.000-00" />
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" autocomplete="current-password" placeholder="senha do app" />
+        <button id="btn-login" class="primary">Entrar</button>
+        <p id="login-erro" class="erro" hidden></p>
+      </section>
+
+      <!-- VIAGENS -->
+      <section id="view-viagens" class="card" hidden>
+        <div class="row-between">
+          <h2>Minhas viagens</h2>
+          <button id="btn-reload" class="link">Recarregar</button>
+        </div>
+        <p class="muted" id="viagens-vazio" hidden>
+          Nenhuma viagem. Crie uma no dashboard e clique em <b>Iniciar</b> (status
+          <b>em_andamento</b>) para poder enviar GPS.
+        </p>
+        <ul id="lista-viagens" class="lista"></ul>
+        <button id="btn-sair" class="link danger">Sair</button>
+      </section>
+
+      <!-- RASTREIO -->
+      <section id="view-track" class="card" hidden>
+        <button id="btn-voltar" class="link">&larr; Trocar viagem</button>
+        <h2 id="track-titulo">Viagem</h2>
+
+        <div class="status" id="track-status">Parado</div>
+
+        <div class="grid">
+          <div class="metric"><span>Enviadas</span><b id="m-enviadas">0</b></div>
+          <div class="metric"><span>No buffer</span><b id="m-buffer">0</b></div>
+          <div class="metric"><span>Alertas</span><b id="m-alertas">0</b></div>
+          <div class="metric"><span>Precisão</span><b id="m-precisao">—</b></div>
+        </div>
+
+        <div class="coords" id="m-coords">Sem posição ainda</div>
+
+        <button id="btn-start" class="primary">Iniciar rastreio</button>
+        <button id="btn-stop" class="danger" hidden>Parar rastreio</button>
+
+        <p id="track-erro" class="erro" hidden></p>
+        <ul id="log" class="log"></ul>
+      </section>
+    </main>
+
+    <script src="/motorista.js"></script>
+  </body>
+</html>

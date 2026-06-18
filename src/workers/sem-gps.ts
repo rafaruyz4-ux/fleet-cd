@@ -21,7 +21,7 @@ export async function detectarSemGps(limiteMin = env.workerSemGps.limiteMin): Pr
   return query<SemGpsAlerta>(
     `
     WITH candidatas AS (
-      SELECT v.id AS viagem_id,
+      SELECT v.id AS viagem_id, v.empresa_id,
              GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em)) AS ref,
              p.lat, p.lng
       FROM viagens v
@@ -44,8 +44,8 @@ export async function detectarSemGps(limiteMin = env.workerSemGps.limiteMin): Pr
             AND a.criado_em >= GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em))
         )
     )
-    INSERT INTO alertas (viagem_id, tipo, descricao, coordenada)
-    SELECT viagem_id, 'sem_gps',
+    INSERT INTO alertas (empresa_id, viagem_id, tipo, descricao, coordenada)
+    SELECT empresa_id, viagem_id, 'sem_gps',
            'Sem posição há ' || round(extract(epoch FROM (now() - ref)) / 60)::int || ' min',
            CASE WHEN lat IS NOT NULL
                 THEN ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
