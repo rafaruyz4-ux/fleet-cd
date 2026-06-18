@@ -13,6 +13,8 @@ export interface FocoMapa {
 
 interface TripMapProps {
   pontos: PontoTrajeto[]
+  /** Linha do trajeto já encaixada nas ruas (map matching). Se ausente, liga os pontos. */
+  linhaRuas?: LatLng[] | null
   rota?: LatLng[] | null
   alertas?: Alerta[]
   foco?: FocoMapa | null
@@ -77,7 +79,7 @@ function elFoco(): HTMLElement {
  * marcadores de início/posição-atual (pulsando), pinos de alerta, legenda, e
  * "voo" até um ponto quando `foco` muda (clique em alerta/parada).
  */
-export function TripMap({ pontos, rota, alertas, foco, className }: TripMapProps) {
+export function TripMap({ pontos, linhaRuas, rota, alertas, foco, className }: TripMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const loadedRef = useRef(false)
@@ -168,10 +170,16 @@ export function TripMap({ pontos, rota, alertas, foco, className }: TripMapProps
     if (!map) return
 
     const render = () => {
+      // Pontos brutos do GPS (para marcadores início/atual).
       const trajetoCoords = pontos.map((p) => [p.lng, p.lat] as [number, number])
+      // Linha desenhada: prioriza a versão encaixada nas ruas; senão liga os pontos.
+      const linhaCoords =
+        linhaRuas && linhaRuas.length >= 2
+          ? linhaRuas.map((p) => [p.lng, p.lat] as [number, number])
+          : trajetoCoords
       const rotaCoords = (rota ?? []).map((p) => [p.lng, p.lat] as [number, number])
 
-      ;(map.getSource('trajeto') as GeoJSONSource | undefined)?.setData(lineFC(trajetoCoords))
+      ;(map.getSource('trajeto') as GeoJSONSource | undefined)?.setData(lineFC(linhaCoords))
       ;(map.getSource('rota') as GeoJSONSource | undefined)?.setData(lineFC(rotaCoords))
 
       markersRef.current.forEach((m) => m.remove())
@@ -204,7 +212,7 @@ export function TripMap({ pontos, rota, alertas, foco, className }: TripMapProps
       }
 
       // Enquadra todos os pontos relevantes.
-      const all = [...trajetoCoords, ...rotaCoords]
+      const all = [...linhaCoords, ...rotaCoords]
       if (all.length === 1) {
         map.easeTo({ center: all[0]!, zoom: 14 })
       } else if (all.length > 1) {
@@ -218,7 +226,7 @@ export function TripMap({ pontos, rota, alertas, foco, className }: TripMapProps
 
     if (loadedRef.current) render()
     else map.once('fleet:ready', render)
-  }, [pontos, rota, alertas])
+  }, [pontos, linhaRuas, rota, alertas])
 
   // "Voa" até um ponto quando `foco` muda (clique em alerta/parada).
   useEffect(() => {

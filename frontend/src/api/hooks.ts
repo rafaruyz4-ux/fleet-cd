@@ -12,6 +12,7 @@ import type {
   Parada,
   Rota,
   Trajetoria,
+  TrajetoRuas,
   Unidade,
   Veiculo,
   Viagem,
@@ -124,6 +125,16 @@ export function useTrajetoria(viagemId: string | undefined, refetchMs?: number) 
     queryFn: () => api.get<Trajetoria>(`/viagens/${viagemId}/posicoes`),
     enabled: !!viagemId,
     refetchInterval: refetchMs,
+  })
+}
+
+export function useTrajetoRuas(viagemId: string | undefined, refetchMs?: number) {
+  return useQuery({
+    queryKey: ['trajeto-ruas', viagemId],
+    queryFn: () => api.get<TrajetoRuas>(`/viagens/${viagemId}/trajeto-ruas`),
+    enabled: !!viagemId,
+    refetchInterval: refetchMs,
+    staleTime: 30_000,
   })
 }
 

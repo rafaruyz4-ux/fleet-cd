@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { ingestPosicoesSchema, type IngestPosicoesInput, type PosicaoInput } from './gps.schemas';
+import { matchTrajeto } from '../../integrations/mapmatch/valhalla';
 
 // ---------------------------------------------------------------------
 // Limiares de detecção (constantes; podem virar configuráveis depois).
@@ -341,6 +342,27 @@ export async function getTrajetoria(
   }));
 
   return { viagem_id: viagemId, total: pontos.length, pontos };
+}
+
+// ---------------------------------------------------------------------
+// Trajeto "nas ruas" (map matching): encaixa o GPS na malha de ruas.
+// ---------------------------------------------------------------------
+export interface TrajetoRuas {
+  viagem_id: string;
+  fonte: 'ruas' | 'gps'; // 'ruas' = encaixado; 'gps' = plano B (linha bruta)
+  linha: { lng: number; lat: number }[];
+}
+
+export async function getTrajetoRuas(empresaId: string, viagemId: string): Promise<TrajetoRuas> {
+  const { pontos } = await getTrajetoria(empresaId, viagemId); // já valida a viagem/tenant
+  const bruto = pontos.map((p) => ({ lng: p.lng, lat: p.lat }));
+
+  // Plano A: encaixar nas ruas. Plano B: devolver a linha bruta.
+  const ruas = await matchTrajeto(bruto);
+  if (ruas && ruas.length >= 2) {
+    return { viagem_id: viagemId, fonte: 'ruas', linha: ruas.map(([lng, lat]) => ({ lng, lat })) };
+  }
+  return { viagem_id: viagemId, fonte: 'gps', linha: bruto };
 }
 
 export interface MinhaViagem {

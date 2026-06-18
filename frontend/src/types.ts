@@ -122,6 +122,13 @@ export interface Trajetoria {
   pontos: PontoTrajeto[]
 }
 
+/** Trajeto encaixado nas ruas (map matching); 'gps' = plano B (linha bruta). */
+export interface TrajetoRuas {
+  viagem_id: string
+  fonte: 'ruas' | 'gps'
+  linha: LatLng[]
+}
+
 export type AlertaTipo = 'velocidade_alta' | 'desvio_rota' | 'parada_longa' | 'sem_gps'
 
 export interface Alerta {

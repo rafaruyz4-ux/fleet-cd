@@ -63,6 +63,16 @@ viagensRouter.get(
   }),
 );
 
+// Trajeto encaixado nas ruas (map matching). Pode demorar um pouco (chama um
+// serviço externo) e cai para a linha bruta se não der.
+viagensRouter.get(
+  '/:id/trajeto-ruas',
+  validate({ params: idParamSchema }),
+  asyncHandler(async (req, res) => {
+    res.json(await gpsService.getTrajetoRuas(tenantId(req), req.params.id!));
+  }),
+);
+
 viagensRouter.get(
   '/:id/alertas',
   validate({ params: idParamSchema }),

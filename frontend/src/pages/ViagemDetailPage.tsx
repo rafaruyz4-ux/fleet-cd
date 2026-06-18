@@ -6,6 +6,7 @@ import type { PontoTrajeto } from '@/types'
 import {
   useAlertasDaViagem,
   useRota,
+  useTrajetoRuas,
   useTrajetoria,
   useViagem,
   useViagemMutations,
@@ -34,6 +35,8 @@ export function ViagemDetailPage() {
   // Atualiza a trajetória a cada 15s quando a viagem está em andamento.
   const emAndamento = viagem?.status === 'em_andamento'
   const { data: trajetoria } = useTrajetoria(id, emAndamento ? 15_000 : undefined)
+  // Trajeto encaixado nas ruas (atualiza junto da trajetória quando em andamento).
+  const { data: trajetoRuas } = useTrajetoRuas(id, emAndamento ? 30_000 : undefined)
   const { data: alertas } = useAlertasDaViagem(id)
   const { data: rota } = useRota(viagem?.rota_planejada_id)
   const { iniciar, encerrar, cancelar, marcarParada } = useViagemMutations()
@@ -160,6 +163,7 @@ export function ViagemDetailPage() {
                   <TripMap
                     className="h-[420px] w-full"
                     pontos={trajetoria?.pontos ?? []}
+                    linhaRuas={trajetoRuas?.linha}
                     rota={rota?.linha}
                     alertas={alertas}
                     foco={foco}
