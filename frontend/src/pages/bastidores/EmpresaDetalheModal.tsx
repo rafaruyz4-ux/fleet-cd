@@ -141,9 +141,15 @@ function RedefinirSenhaInline({
   const [erro, setErro] = useState<string | null>(null)
   const [okSenha, setOkSenha] = useState<string | null>(null)
 
-  async function salvar(e: React.FormEvent) {
-    e.preventDefault()
+  // Sem <form> aqui de propósito: este bloco fica DENTRO do formulário de editar
+  // a empresa, e um <form> dentro de outro faz o navegador disparar o formulário
+  // errado. Por isso usamos botão comum (type="button") + clique.
+  async function salvar() {
     setErro(null)
+    if (senha.trim().length < 8) {
+      setErro('A senha precisa ter ao menos 8 caracteres.')
+      return
+    }
     try {
       await redefinir.mutateAsync({ empresaId, usuarioId: usuario.id, senha })
       setOkSenha(senha)
@@ -158,9 +164,24 @@ function RedefinirSenhaInline({
 
   if (okSenha) {
     return (
-      <p className="rounded-md bg-success/10 px-3 py-2 text-xs text-success">
-        Senha redefinida. Envie ao cliente: <strong>{okSenha}</strong>
-      </p>
+      <div className="space-y-2 rounded-md border border-success/30 bg-success/10 p-3">
+        <p className="text-sm font-medium text-success">✓ Senha redefinida com sucesso!</p>
+        <p className="text-sm">
+          <span className="text-muted-foreground">Nova senha para enviar ao cliente:</span>{' '}
+          <strong className="select-all">{okSenha}</strong>
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setOkSenha(null)
+            setErro(null)
+          }}
+        >
+          OK, entendi
+        </Button>
+      </div>
     )
   }
 
@@ -182,13 +203,18 @@ function RedefinirSenhaInline({
   }
 
   return (
-    <form onSubmit={salvar} className="space-y-2 rounded-md border bg-card p-2">
+    <div className="space-y-2 rounded-md border bg-card p-2">
       <Input
         value={senha}
         onChange={(e) => setSenha(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void salvar()
+          }
+        }}
         placeholder="Nova senha (mín. 8 caracteres)"
         minLength={8}
-        required
         autoFocus
       />
       {erro && <p className="text-xs text-destructive">{erro}</p>}
@@ -205,11 +231,11 @@ function RedefinirSenhaInline({
         >
           Cancelar
         </Button>
-        <Button type="submit" size="sm" disabled={redefinir.isPending}>
+        <Button type="button" size="sm" disabled={redefinir.isPending} onClick={() => void salvar()}>
           {redefinir.isPending && <Spinner />}
           Salvar senha
         </Button>
       </div>
-    </form>
+    </div>
   )
 }
