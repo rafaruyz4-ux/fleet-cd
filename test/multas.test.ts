@@ -44,14 +44,11 @@ describe('multas + vínculo automático', () => {
 
   it('multa fora da janela fica aguardando_revisao', async () => {
     const { veiculo } = await viagemNaJanela();
-    const res = await api()
-      .post('/api/multas')
-      .set('Authorization', h())
-      .send({
-        numero_auto: numeroAutoUnico(),
-        veiculo_id: veiculo,
-        ocorrida_em: '2026-05-28T20:00:00Z',
-      });
+    const res = await api().post('/api/multas').set('Authorization', h()).send({
+      numero_auto: numeroAutoUnico(),
+      veiculo_id: veiculo,
+      ocorrida_em: '2026-05-28T20:00:00Z',
+    });
     expect(res.body.status_revisao).toBe('aguardando_revisao');
     expect(res.body.viagem_id).toBeNull();
   });
@@ -95,14 +92,11 @@ describe('multas + vínculo automático', () => {
     const veiculo = await criarVeiculo(token);
     const { id: motorista } = await criarMotorista(token);
     // multa antes de existir viagem correspondente
-    const multa = await api()
-      .post('/api/multas')
-      .set('Authorization', h())
-      .send({
-        numero_auto: numeroAutoUnico(),
-        veiculo_id: veiculo,
-        ocorrida_em: '2026-05-29T09:30:00Z',
-      });
+    const multa = await api().post('/api/multas').set('Authorization', h()).send({
+      numero_auto: numeroAutoUnico(),
+      veiculo_id: veiculo,
+      ocorrida_em: '2026-05-29T09:30:00Z',
+    });
     expect(multa.body.status_revisao).toBe('aguardando_revisao');
 
     const v = await api()

@@ -21,5 +21,12 @@ export default defineConfig({
     },
     testTimeout: 20000,
     hookTimeout: 30000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      // Mede só o código de produção; deixa de fora migrações/seed/infra de teste.
+      include: ['src/**/*.ts'],
+      exclude: ['src/db/migrate.ts', 'src/db/seed.ts', 'src/**/*.schemas.ts'],
+    },
   },
 });
