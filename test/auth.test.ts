@@ -42,8 +42,8 @@ describe('auth — motorista (app)', () => {
   });
 
   it('login por CPF (sem pontuação) + senha retorna token', async () => {
-    const { cpf } = await criarMotorista(token, { senha: 'app-123', cpf: '52998224725' });
-    const res = await api().post('/api/auth/motorista/login').send({ cpf, senha: 'app-123' });
+    const { cpf } = await criarMotorista(token, { senha: 'app-1234', cpf: '52998224725' });
+    const res = await api().post('/api/auth/motorista/login').send({ cpf, senha: 'app-1234' });
     expect(res.status).toBe(200);
     expect(res.body.accessToken).toBeTruthy();
     expect(res.body.motorista.cpf).toBeTruthy();

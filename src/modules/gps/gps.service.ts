@@ -308,6 +308,10 @@ export interface PontoTrajeto {
   recebido_em: string;
 }
 
+// Teto de pontos lidos por trajeto: guarda contra estouro de memória em viagens
+// muito longas (a poda/retenção de posicoes_gps é tratada à parte, na etapa LGPD).
+const MAX_PONTOS_TRAJETO = 50_000;
+
 export async function getTrajetoria(
   empresaId: string,
   viagemId: string,
@@ -328,9 +332,15 @@ export async function getTrajetoria(
   }>(
     `SELECT ST_Y(coordenada::geometry) AS lat, ST_X(coordenada::geometry) AS lng,
             velocidade_kmh, precisao_m, registrado_em, recebido_em
-     FROM posicoes_gps WHERE viagem_id = $1 AND empresa_id = $2 ORDER BY registrado_em`,
-    [viagemId, empresaId],
+     FROM posicoes_gps WHERE viagem_id = $1 AND empresa_id = $2
+     ORDER BY registrado_em LIMIT $3`,
+    [viagemId, empresaId, MAX_PONTOS_TRAJETO],
   );
+  if (rows.length === MAX_PONTOS_TRAJETO) {
+    console.warn(
+      `[gps] trajeto da viagem ${viagemId} atingiu o teto de ${MAX_PONTOS_TRAJETO} pontos`,
+    );
+  }
 
   const pontos: PontoTrajeto[] = rows.map((r) => ({
     lat: r.lat,

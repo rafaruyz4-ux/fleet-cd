@@ -14,14 +14,36 @@ function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+/** Lê uma variável numérica e aborta o boot se vier algo que não é número. */
+function numberEnv(name: string, fallback: string): number {
+  const raw = optional(name, fallback);
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new Error(`Variável de ambiente ${name} deve ser um número (recebido: "${raw}")`);
+  }
+  return n;
+}
+
+const nodeEnv = optional('NODE_ENV', 'development');
+const isProduction = nodeEnv === 'production';
+const corsOrigins = optional('CORS_ORIGINS', '*')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+// Em produção não pode ficar com CORS liberado para qualquer origem ('*'):
+// num SaaS multi-cliente isso enfraquece a proteção entre origens. Exija a lista.
+if (isProduction && (corsOrigins.length === 0 || corsOrigins.includes('*'))) {
+  throw new Error(
+    'CORS_ORIGINS deve listar as origens permitidas (sem "*") quando NODE_ENV=production',
+  );
+}
+
 export const env = {
-  nodeEnv: optional('NODE_ENV', 'development'),
-  isProduction: process.env.NODE_ENV === 'production',
-  port: Number(optional('PORT', '3000')),
-  corsOrigins: optional('CORS_ORIGINS', '*')
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean),
+  nodeEnv,
+  isProduction,
+  port: numberEnv('PORT', '3000'),
+  corsOrigins,
 
   databaseUrl: required('DATABASE_URL'),
   redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
@@ -45,13 +67,13 @@ export const env = {
     deviceTtl: optional('JWT_DEVICE_TTL', '365d'),
   },
 
-  bcryptRounds: Number(optional('BCRYPT_ROUNDS', '12')),
+  bcryptRounds: numberEnv('BCRYPT_ROUNDS', '12'),
 
   // Worker de detecção de "sem GPS" (veículo que parou de transmitir).
   workerSemGps: {
     enabled: optional('WORKER_SEM_GPS_ENABLED', 'true') !== 'false',
-    intervaloMs: Number(optional('WORKER_SEM_GPS_INTERVALO_S', '60')) * 1000,
-    limiteMin: Number(optional('WORKER_SEM_GPS_LIMITE_MIN', '10')),
+    intervaloMs: numberEnv('WORKER_SEM_GPS_INTERVALO_S', '60') * 1000,
+    limiteMin: numberEnv('WORKER_SEM_GPS_LIMITE_MIN', '10'),
   },
 
   seedAdmin: {
@@ -60,3 +82,7 @@ export const env = {
     senha: optional('SEED_ADMIN_SENHA', 'trocar-senha-123'),
   },
 } as const;
+
+// O seed não pode subir uma conta de admin com a senha-padrão de exemplo em
+// produção (credencial conhecida publicamente). Trava no boot do seed.
+export const SENHA_SEED_PADRAO = 'trocar-senha-123';

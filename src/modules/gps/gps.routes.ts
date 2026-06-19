@@ -50,7 +50,13 @@ export const deviceRouter = Router();
 deviceRouter.post(
   '/overland',
   asyncHandler(async (req, res) => {
-    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    // Preferimos o token por cabeçalho (não fica gravado em logs de acesso);
+    // a query (?token=) segue como reserva para apps que só sabem mandar URL.
+    const header = req.headers.authorization;
+    const tokenHeader = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+    const tokenCustom = typeof req.headers['x-device-token'] === 'string' ? req.headers['x-device-token'] : '';
+    const tokenQuery = typeof req.query.token === 'string' ? req.query.token : '';
+    const token = tokenHeader || tokenCustom || tokenQuery;
     let motoristaId: string | null = null;
     let empresaId: string | null = null;
     try {

@@ -30,9 +30,16 @@ interface RefreshTokenPayload {
   tipo: PrincipalTipo;
 }
 
+// Identidade do emissor: fixada na assinatura e exigida na verificação, para
+// que um token de outro sistema/segredo trocado não seja aceito por engano.
+const ISSUER = 'fleet-cd';
+const ALGORITHMS: jwt.Algorithm[] = ['HS256'];
+
 export function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, env.jwt.accessSecret, {
     expiresIn: env.jwt.accessTtl,
+    algorithm: 'HS256',
+    issuer: ISSUER,
   } as SignOptions);
 }
 
@@ -42,6 +49,8 @@ export function signAccessToken(payload: AccessTokenPayload): string {
 export function signDeviceToken(payload: MotoristaTokenPayload): string {
   return jwt.sign(payload, env.jwt.accessSecret, {
     expiresIn: env.jwt.deviceTtl,
+    algorithm: 'HS256',
+    issuer: ISSUER,
   } as SignOptions);
 }
 
@@ -49,15 +58,29 @@ export function signRefreshToken(subjectId: string, tipo: PrincipalTipo): string
   const payload: RefreshTokenPayload = { sub: subjectId, type: 'refresh', tipo };
   return jwt.sign(payload, env.jwt.refreshSecret, {
     expiresIn: env.jwt.refreshTtl,
+    algorithm: 'HS256',
+    issuer: ISSUER,
   } as SignOptions);
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return jwt.verify(token, env.jwt.accessSecret) as AccessTokenPayload;
+  const decoded = jwt.verify(token, env.jwt.accessSecret, {
+    algorithms: ALGORITHMS,
+    issuer: ISSUER,
+  }) as AccessTokenPayload & { type?: string };
+  // Um refresh token nunca pode passar como access token, mesmo que algum dia
+  // os segredos sejam configurados iguais por engano.
+  if (decoded.type === 'refresh') {
+    throw new Error('Refresh token não é aceito como token de acesso');
+  }
+  return decoded;
 }
 
 export function verifyRefreshToken(token: string): RefreshTokenPayload {
-  const decoded = jwt.verify(token, env.jwt.refreshSecret) as RefreshTokenPayload;
+  const decoded = jwt.verify(token, env.jwt.refreshSecret, {
+    algorithms: ALGORITHMS,
+    issuer: ISSUER,
+  }) as RefreshTokenPayload;
   if (decoded.type !== 'refresh') {
     throw new Error('Token não é um refresh token');
   }

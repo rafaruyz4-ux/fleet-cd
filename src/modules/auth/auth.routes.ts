@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { requireAuth, requireMotorista, requireUsuario } from '../../middleware/auth';
+import { authLimiter } from '../../middleware/rateLimit';
 import { validate } from '../../middleware/validate';
 import { loginSchema, motoristaLoginSchema, refreshSchema } from './auth.schemas';
 import * as authService from './auth.service';
@@ -10,6 +11,7 @@ export const authRouter = Router();
 // --- Gestores do dashboard ---
 authRouter.post(
   '/login',
+  authLimiter,
   validate({ body: loginSchema }),
   asyncHandler(async (req, res) => {
     const { email, senha } = req.body;
@@ -29,6 +31,7 @@ authRouter.get(
 // --- Motoristas (app) ---
 authRouter.post(
   '/motorista/login',
+  authLimiter,
   validate({ body: motoristaLoginSchema }),
   asyncHandler(async (req, res) => {
     const { cpf, senha } = req.body;
@@ -48,6 +51,7 @@ authRouter.get(
 // --- Refresh (gestor ou motorista, conforme o tipo do token) ---
 authRouter.post(
   '/refresh',
+  authLimiter,
   validate({ body: refreshSchema }),
   asyncHandler(async (req, res) => {
     res.json(await authService.refresh(req.body.refreshToken));

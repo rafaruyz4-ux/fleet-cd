@@ -9,7 +9,7 @@ export const createMotoristaSchema = z.object({
   categoria_cnh: z.enum(['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']).optional(),
   validade_cnh: z.string().date('Data inválida (use YYYY-MM-DD)').optional(),
   telefone: z.string().max(20).optional(),
-  senha: z.string().min(6).max(72).optional(),
+  senha: z.string().min(8, 'A senha deve ter ao menos 8 caracteres').max(72).optional(),
   ativo: z.boolean().optional(),
 });
 

@@ -1,4 +1,4 @@
-import { env } from '../config/env';
+import { env, SENHA_SEED_PADRAO } from '../config/env';
 import { hashPassword } from '../utils/password';
 import { pool, queryOne } from './pool';
 
@@ -7,6 +7,14 @@ const EMPRESA_PADRAO_ID = '00000000-0000-0000-0000-000000000001';
 
 /** Cria a empresa padrão e o usuário admin inicial (idempotente). */
 async function seed(): Promise<void> {
+  // Em produção, não permitir criar o admin com a senha-padrão de exemplo
+  // (é pública neste repositório). Exija SEED_ADMIN_SENHA própria.
+  if (env.isProduction && env.seedAdmin.senha === SENHA_SEED_PADRAO) {
+    throw new Error(
+      'Defina SEED_ADMIN_SENHA (a senha-padrão de exemplo não é permitida em produção)',
+    );
+  }
+
   // Garante a empresa padrão (a migration 003 já a cria; isto cobre bancos
   // antigos e deixa o seed autossuficiente).
   await pool.query(
