@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NF_STATUS } from '../../domain/status';
 
 // Chave de acesso da NF-e: 44 dígitos numéricos.
 const chaveAcessoRegex = /^\d{44}$/;
@@ -30,7 +31,7 @@ const nfBase = {
   valor_total: z.number().nonnegative().optional(),
   peso_kg: z.number().nonnegative().optional(),
   xml_path: z.string().max(500).optional(),
-  status: z.enum(['importada', 'alocada', 'em_viagem', 'entregue']).optional(),
+  status: z.enum(NF_STATUS).optional(),
 };
 
 export const createNfSchema = z.object({
@@ -46,7 +47,7 @@ export const updateNfSchema = z
   .partial();
 
 export const listNfsQuerySchema = z.object({
-  status: z.enum(['importada', 'alocada', 'em_viagem', 'entregue']).optional(),
+  status: z.enum(NF_STATUS).optional(),
   destinatario_cnpj: z.string().max(18).optional(),
   unidade_propria_id: z.string().uuid().optional(),
   // Janela de emissão (emitida_em).

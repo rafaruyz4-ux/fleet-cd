@@ -3,6 +3,7 @@ import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { ingestPosicoesSchema, type IngestPosicoesInput, type PosicaoInput } from './gps.schemas';
 import { matchTrajeto } from '../../integrations/mapmatch/valhalla';
+import { ViagemStatus } from '../../domain/status';
 
 // ---------------------------------------------------------------------
 // Limiares de detecção (constantes; podem virar configuráveis depois).
@@ -106,7 +107,7 @@ export async function ingestPosicoes(
     if (viagem.motorista_id !== motoristaId) {
       throw AppError.forbidden('Esta viagem não pertence ao motorista autenticado');
     }
-    if (viagem.status !== 'em_andamento') {
+    if (viagem.status !== ViagemStatus.EM_ANDAMENTO) {
       throw AppError.badRequest('Só é possível enviar posições de viagens em andamento');
     }
 

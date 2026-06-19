@@ -1,12 +1,13 @@
 import { z } from 'zod';
+import { MULTA_STATUS_PAGAMENTO, MULTA_STATUS_REVISAO } from '../../domain/status';
 
 const coordenadaSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
 });
 
-const statusPagamento = z.enum(['pendente', 'pago', 'recurso']);
-const statusRevisao = z.enum(['auto_vinculada', 'aguardando_revisao', 'revisada']);
+const statusPagamento = z.enum(MULTA_STATUS_PAGAMENTO);
+const statusRevisao = z.enum(MULTA_STATUS_REVISAO);
 const fonte = z.enum(['infosimples', 'manual']);
 
 export const createMultaSchema = z

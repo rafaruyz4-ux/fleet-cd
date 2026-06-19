@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EMPRESA_PLANO } from '../../domain/status';
 
 const cnpjRegex = /^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/;
 
@@ -22,7 +23,7 @@ export const atualizarEmpresaSchema = z
     nome: z.string().trim().min(2, 'Nome da empresa obrigatório').max(180).optional(),
     // string vazia limpa o CNPJ; ausente = não mexe.
     cnpj: z.string().trim().regex(cnpjRegex, 'CNPJ inválido').optional().or(z.literal('')),
-    plano: z.enum(['trial', 'ativo', 'suspenso', 'cancelado']).optional(),
+    plano: z.enum(EMPRESA_PLANO).optional(),
     ativo: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nada para atualizar' });

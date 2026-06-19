@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VIAGEM_STATUS, PARADA_STATUS } from '../../domain/status';
 
 const uuid = z.string().uuid('ID inválido');
 
@@ -32,7 +33,7 @@ export const encerrarViagemSchema = z.object({
 });
 
 export const listViagensQuerySchema = z.object({
-  status: z.enum(['em_andamento', 'encerrada', 'cancelada']).optional(),
+  status: z.enum(VIAGEM_STATUS).optional(),
   veiculo_id: uuid.optional(),
   motorista_id: uuid.optional(),
   // Janela sobre criado_em.
@@ -42,7 +43,7 @@ export const listViagensQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().default(0),
 });
 
-const paradaStatus = z.enum(['pendente', 'em_rota', 'entregue', 'falhou']);
+const paradaStatus = z.enum(PARADA_STATUS);
 
 export const addParadaSchema = z.object({
   nf_id: uuid,

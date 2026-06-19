@@ -11,6 +11,7 @@ import type {
   UpdateParadaInput,
   UpdateViagemInput,
 } from './viagens.schemas';
+import { ViagemStatus, ParadaStatus, NfStatus } from '../../domain/status';
 
 // Runner: abstrai "rodar uma query" tanto no pool quanto dentro de uma
 // transação. Ler via o client da transação enxerga linhas ainda não
@@ -203,7 +204,7 @@ async function alocarNfComoParada(
     [nfId, empresaId],
   );
   if (!nf[0]) throw AppError.badRequest(`NF ${nfId} não encontrada`);
-  if (nf[0].status === 'entregue') {
+  if (nf[0].status === NfStatus.ENTREGUE) {
     throw AppError.badRequest(`NF ${nfId} já foi entregue e não pode ser alocada`);
   }
 
@@ -213,7 +214,7 @@ async function alocarNfComoParada(
     [empresaId, viagemId, nfId, ordem, chegadaPrevista ?? null],
   );
   await run('UPDATE notas_fiscais SET status = $1 WHERE id = $2 AND empresa_id = $3', [
-    viagemIniciada ? 'em_viagem' : 'alocada',
+    viagemIniciada ? NfStatus.EM_VIAGEM : NfStatus.ALOCADA,
     nfId,
     empresaId,
   ]);
@@ -301,7 +302,7 @@ export async function iniciar(
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, id);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
-    if (viagem.status !== 'em_andamento') {
+    if (viagem.status !== ViagemStatus.EM_ANDAMENTO) {
       throw AppError.badRequest(`Viagem ${viagem.status} não pode ser iniciada`);
     }
     if (viagem.iniciada_em) {
@@ -336,7 +337,7 @@ export async function encerrar(
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, id);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
-    if (viagem.status !== 'em_andamento') {
+    if (viagem.status !== ViagemStatus.EM_ANDAMENTO) {
       throw AppError.badRequest(`Viagem ${viagem.status} não pode ser encerrada`);
     }
     if (!viagem.iniciada_em) {
@@ -365,10 +366,10 @@ export async function cancelar(empresaId: string, id: string): Promise<Viagem> {
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, id);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
-    if (viagem.status === 'encerrada') {
+    if (viagem.status === ViagemStatus.ENCERRADA) {
       throw AppError.badRequest('Viagem encerrada não pode ser cancelada');
     }
-    if (viagem.status === 'cancelada') {
+    if (viagem.status === ViagemStatus.CANCELADA) {
       throw AppError.badRequest('Viagem já está cancelada');
     }
 
@@ -400,7 +401,7 @@ export async function addParada(
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, viagemId);
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
-    if (viagem.status !== 'em_andamento') {
+    if (viagem.status !== ViagemStatus.EM_ANDAMENTO) {
       throw AppError.badRequest('Só é possível adicionar paradas a viagens em andamento');
     }
 
@@ -453,7 +454,7 @@ export async function updateParada(
     if (input.saida_real !== undefined) u.set('saida_real', input.saida_real);
 
     // Ao marcar entregue, registra a chegada (se ausente) e conclui a NF.
-    if (input.status === 'entregue') {
+    if (input.status === ParadaStatus.ENTREGUE) {
       if (input.chegada_real === undefined)
         u.setExpr('chegada_real = COALESCE(chegada_real, now())');
     }
@@ -467,7 +468,7 @@ export async function updateParada(
       );
     }
 
-    if (input.status === 'entregue' && parada.nf_id) {
+    if (input.status === ParadaStatus.ENTREGUE && parada.nf_id) {
       await run(`UPDATE notas_fiscais SET status = 'entregue' WHERE id = $1 AND empresa_id = $2`, [
         parada.nf_id,
         empresaId,
