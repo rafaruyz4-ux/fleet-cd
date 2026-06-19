@@ -58,12 +58,7 @@ function montarEndereco(ender: Record<string, unknown> | undefined): string | un
   const uf = str(ender.UF);
   const cep = str(ender.CEP);
   const cidadeUf = [mun, uf].filter(Boolean).join('/');
-  const partes = [
-    [linha, nro].filter(Boolean).join(', '),
-    bairro,
-    cidadeUf,
-    cep,
-  ].filter(Boolean);
+  const partes = [[linha, nro].filter(Boolean).join(', '), bairro, cidadeUf, cep].filter(Boolean);
   return partes.length ? partes.join(' - ') : undefined;
 }
 

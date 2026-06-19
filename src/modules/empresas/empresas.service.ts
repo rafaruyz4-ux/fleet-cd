@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
+import { MontadorUpdate } from '../../db/sql';
 import { hashPassword } from '../../utils/password';
 import type { AtualizarEmpresaInput, CriarEmpresaInput } from './empresas.schemas';
 
@@ -100,22 +101,11 @@ export async function atualizar(id: string, input: AtualizarEmpresaInput): Promi
     throw AppError.notFound('Empresa não encontrada');
   }
 
-  const sets: string[] = [];
-  const valores: unknown[] = [];
-  let i = 1;
+  const u = new MontadorUpdate();
 
-  if (input.nome !== undefined) {
-    sets.push(`nome = $${i++}`);
-    valores.push(input.nome);
-  }
-  if (input.plano !== undefined) {
-    sets.push(`plano = $${i++}`);
-    valores.push(input.plano);
-  }
-  if (input.ativo !== undefined) {
-    sets.push(`ativo = $${i++}`);
-    valores.push(input.ativo);
-  }
+  if (input.nome !== undefined) u.set('nome', input.nome);
+  if (input.plano !== undefined) u.set('plano', input.plano);
+  if (input.ativo !== undefined) u.set('ativo', input.ativo);
   if (input.cnpj !== undefined) {
     const cnpj = input.cnpj ? input.cnpj.replace(/\D/g, '') : null;
     if (cnpj) {
@@ -127,13 +117,12 @@ export async function atualizar(id: string, input: AtualizarEmpresaInput): Promi
         throw AppError.conflict('Já existe uma empresa com este CNPJ');
       }
     }
-    sets.push(`cnpj = $${i++}`);
-    valores.push(cnpj);
+    u.set('cnpj', cnpj);
   }
 
-  if (sets.length > 0) {
-    valores.push(id);
-    await query(`UPDATE empresas SET ${sets.join(', ')} WHERE id = $${i}`, valores);
+  if (!u.vazio) {
+    const idPh = u.ph(id);
+    await query(`UPDATE empresas SET ${u.sql} WHERE id = ${idPh}`, u.valores);
   }
   return obter(id);
 }
@@ -186,7 +175,12 @@ export async function criar(input: CriarEmpresaInput): Promise<EmpresaCriada> {
     }
 
     const slug = await slugLivre(slugify(input.empresaNome), client);
-    const empresa = await client.query<{ id: string; nome: string; slug: string | null; plano: string }>(
+    const empresa = await client.query<{
+      id: string;
+      nome: string;
+      slug: string | null;
+      plano: string;
+    }>(
       `INSERT INTO empresas (nome, cnpj, slug, plano)
        VALUES ($1, $2, $3, $4) RETURNING id, nome, slug, plano`,
       [input.empresaNome, cnpj, slug, plano],

@@ -59,7 +59,11 @@ describe('telemetria — GPS + alertas', () => {
     await api()
       .post(`/api/app/viagens/${viagemId}/posicoes`)
       .set('Authorization', bearer(appToken))
-      .send({ posicoes: [{ lat: -23.56, lng: -46.648, velocidade_kmh: 130, registrado_em: '2026-05-28T12:00:00Z' }] });
+      .send({
+        posicoes: [
+          { lat: -23.56, lng: -46.648, velocidade_kmh: 130, registrado_em: '2026-05-28T12:00:00Z' },
+        ],
+      });
 
     const traj = await api().get(`/api/viagens/${viagemId}/posicoes`).set('Authorization', h());
     expect(traj.body.total).toBe(1);

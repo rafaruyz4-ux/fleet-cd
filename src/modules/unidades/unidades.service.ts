@@ -1,5 +1,6 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
+import { MontadorUpdate } from '../../db/sql';
 import type { CreateUnidadeInput, UpdateUnidadeInput } from './unidades.schemas';
 
 // Extrai lat/lng do GEOGRAPHY como colunas planas no SELECT.
@@ -93,42 +94,37 @@ export async function create(empresaId: string, input: CreateUnidadeInput): Prom
   return toUnidade(row!);
 }
 
-export async function update(empresaId: string, id: string, input: UpdateUnidadeInput): Promise<Unidade> {
+export async function update(
+  empresaId: string,
+  id: string,
+  input: UpdateUnidadeInput,
+): Promise<Unidade> {
   await getById(empresaId, id);
 
-  const sets: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
-  const assign = (expr: string, value: unknown) => {
-    values.push(value);
-    sets.push(`${expr} = $${i++}`);
-  };
+  const u = new MontadorUpdate();
 
-  if (input.nome !== undefined) assign('nome', input.nome);
-  if (input.cnpj !== undefined) assign('cnpj', input.cnpj);
-  if (input.endereco !== undefined) assign('endereco', input.endereco);
-  if (input.ativo !== undefined) assign('ativo', input.ativo);
+  if (input.nome !== undefined) u.set('nome', input.nome);
+  if (input.cnpj !== undefined) u.set('cnpj', input.cnpj);
+  if (input.endereco !== undefined) u.set('endereco', input.endereco);
+  if (input.ativo !== undefined) u.set('ativo', input.ativo);
   if (input.janela_recebimento !== undefined) {
-    assign('janela_recebimento', JSON.stringify(input.janela_recebimento));
+    u.set('janela_recebimento', JSON.stringify(input.janela_recebimento));
   }
   if (input.coordenada !== undefined) {
-    values.push(input.coordenada.lng);
-    const lngIdx = i++;
-    values.push(input.coordenada.lat);
-    const latIdx = i++;
-    sets.push(
-      `coordenada = ST_SetSRID(ST_MakePoint($${lngIdx}, $${latIdx}), 4326)::geography`,
+    u.setExpr(
+      `coordenada = ST_SetSRID(ST_MakePoint(${u.ph(input.coordenada.lng)}, ${u.ph(input.coordenada.lat)}), 4326)::geography`,
     );
   }
 
-  if (sets.length === 0) {
+  if (u.vazio) {
     return getById(empresaId, id);
   }
 
-  values.push(id, empresaId);
+  const idPh = u.ph(id);
+  const empPh = u.ph(empresaId);
   const row = await queryOne<UnidadeRow>(
-    `UPDATE unidades_proprias SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${SELECT_COLS}`,
-    values,
+    `UPDATE unidades_proprias SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh} RETURNING ${SELECT_COLS}`,
+    u.valores,
   );
   return toUnidade(row!);
 }

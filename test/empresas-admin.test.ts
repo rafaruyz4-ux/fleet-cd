@@ -70,9 +70,12 @@ describe('backoffice — criação de empresa-cliente (super admin)', () => {
 
   it('gestor comum (não super admin) → 403 ao criar e ao listar', async () => {
     const gestor = await criarEmpresaComGestor();
-    expect((await api().get('/api/admin/empresas').set('Authorization', bearer(gestor))).status).toBe(403);
     expect(
-      (await api().post('/api/admin/empresas').set('Authorization', bearer(gestor)).send(payload())).status,
+      (await api().get('/api/admin/empresas').set('Authorization', bearer(gestor))).status,
+    ).toBe(403);
+    expect(
+      (await api().post('/api/admin/empresas').set('Authorization', bearer(gestor)).send(payload()))
+        .status,
     ).toBe(403);
   });
 
@@ -83,7 +86,10 @@ describe('backoffice — criação de empresa-cliente (super admin)', () => {
   it('e-mail já em uso → 409', async () => {
     const token = await loginGestor();
     const email = emailUnico();
-    await api().post('/api/admin/empresas').set('Authorization', bearer(token)).send(payload({ adminEmail: email }));
+    await api()
+      .post('/api/admin/empresas')
+      .set('Authorization', bearer(token))
+      .send(payload({ adminEmail: email }));
     const res = await api()
       .post('/api/admin/empresas')
       .set('Authorization', bearer(token))
@@ -187,7 +193,9 @@ describe('backoffice — redefinir senha de usuário (super admin)', () => {
       .set('Authorization', bearer(token))
       .send(payload({ adminEmail: email, adminSenha: 'inicial-12345' }));
     const empresaId = criada.body.empresa.id as string;
-    const detalhe = await api().get(`/api/admin/empresas/${empresaId}`).set('Authorization', bearer(token));
+    const detalhe = await api()
+      .get(`/api/admin/empresas/${empresaId}`)
+      .set('Authorization', bearer(token));
     return { empresaId, usuarioId: detalhe.body.usuarios[0].id as string, email };
   }
 

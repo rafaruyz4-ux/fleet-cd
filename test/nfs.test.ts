@@ -32,12 +32,18 @@ describe('NFs', () => {
   it('chave de acesso duplicada → 409', async () => {
     const chave = chaveUnica();
     await api().post('/api/nfs').set('Authorization', h()).send({ chave_acesso: chave });
-    const dup = await api().post('/api/nfs').set('Authorization', h()).send({ chave_acesso: chave });
+    const dup = await api()
+      .post('/api/nfs')
+      .set('Authorization', h())
+      .send({ chave_acesso: chave });
     expect(dup.status).toBe(409);
   });
 
   it('chave inválida → 400', async () => {
-    const res = await api().post('/api/nfs').set('Authorization', h()).send({ chave_acesso: '123' });
+    const res = await api()
+      .post('/api/nfs')
+      .set('Authorization', h())
+      .send({ chave_acesso: '123' });
     expect(res.status).toBe(400);
   });
 

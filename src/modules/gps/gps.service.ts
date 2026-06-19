@@ -44,8 +44,7 @@ function distanciaM(a: Ponto, b: Ponto): number {
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
@@ -98,10 +97,10 @@ export async function ingestPosicoes(
       motorista_id: string;
       status: string;
       rota_planejada_id: string | null;
-    }>('SELECT motorista_id, status, rota_planejada_id FROM viagens WHERE id = $1 AND empresa_id = $2', [
-      viagemId,
-      empresaId,
-    ]);
+    }>(
+      'SELECT motorista_id, status, rota_planejada_id FROM viagens WHERE id = $1 AND empresa_id = $2',
+      [viagemId, empresaId],
+    );
     const viagem = viagemRows.rows[0];
     if (!viagem) throw AppError.notFound('Viagem não encontrada');
     if (viagem.motorista_id !== motoristaId) {
@@ -163,7 +162,15 @@ export async function ingestPosicoes(
       await client.query(
         `INSERT INTO posicoes_gps (empresa_id, viagem_id, coordenada, velocidade_kmh, precisao_m, registrado_em)
          VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography, $5, $6, $7)`,
-        [empresaId, viagemId, p.lng, p.lat, p.velocidade_kmh ?? null, p.precisao_m ?? null, p.registrado_em],
+        [
+          empresaId,
+          viagemId,
+          p.lng,
+          p.lat,
+          p.velocidade_kmh ?? null,
+          p.precisao_m ?? null,
+          p.registrado_em,
+        ],
       );
       inseridas++;
 
@@ -384,7 +391,10 @@ export interface MinhaViagem {
   paradas_count: number;
 }
 
-export async function getMinhasViagens(empresaId: string, motoristaId: string): Promise<MinhaViagem[]> {
+export async function getMinhasViagens(
+  empresaId: string,
+  motoristaId: string,
+): Promise<MinhaViagem[]> {
   return query<MinhaViagem>(
     `SELECT v.id, v.status, ve.placa AS veiculo_placa, v.iniciada_em, v.criado_em,
             (SELECT COUNT(*)::int FROM paradas WHERE viagem_id = v.id) AS paradas_count

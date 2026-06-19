@@ -12,6 +12,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,js,mjs,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,mjs,json,md}\"",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
     "db:up": "docker compose up -d",
@@ -35,6 +39,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
@@ -43,9 +48,13 @@
     "@types/node": "^20.14.0",
     "@types/pg": "^8.11.6",
     "@types/supertest": "^6.0.2",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.4",
     "supertest": "^7.0.0",
     "tsx": "^4.16.0",
     "typescript": "^5.5.3",
+    "typescript-eslint": "^8.61.1",
     "vitest": "^4.1.7"
   }
 }

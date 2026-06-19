@@ -43,18 +43,18 @@ A API sobe em `http://localhost:3000`. Healthcheck: `GET /health`.
 
 ## Scripts
 
-| Script             | Descrição                                              |
-| ------------------ | ------------------------------------------------------ |
-| `npm run dev`      | API com hot reload (tsx watch)                         |
-| `npm run build`    | Compila TypeScript para `dist/`                        |
-| `npm start`        | Roda a versão compilada                                |
-| `npm run typecheck`| Checagem de tipos sem emitir                           |
-| `npm run migrate`  | Aplica migrations pendentes                            |
-| `npm run seed`     | Cria o usuário admin inicial (idempotente)             |
-| `npm run db:up`    | Sobe Postgres + Redis (docker compose)                 |
-| `npm run db:down`  | Derruba os containers                                  |
-| `npm test`         | Roda a suíte de testes (Vitest, requer o banco no ar)  |
-| `npm run test:watch`| Testes em modo watch                                  |
+| Script               | Descrição                                             |
+| -------------------- | ----------------------------------------------------- |
+| `npm run dev`        | API com hot reload (tsx watch)                        |
+| `npm run build`      | Compila TypeScript para `dist/`                       |
+| `npm start`          | Roda a versão compilada                               |
+| `npm run typecheck`  | Checagem de tipos sem emitir                          |
+| `npm run migrate`    | Aplica migrations pendentes                           |
+| `npm run seed`       | Cria o usuário admin inicial (idempotente)            |
+| `npm run db:up`      | Sobe Postgres + Redis (docker compose)                |
+| `npm run db:down`    | Derruba os containers                                 |
+| `npm test`           | Roda a suíte de testes (Vitest, requer o banco no ar) |
+| `npm run test:watch` | Testes em modo watch                                  |
 
 ## Endpoints (Sprints 1–6)
 
@@ -72,22 +72,22 @@ exigem header `Authorization: Bearer <accessToken>`.
 | POST   | `/auth/motorista/login` | Login do motorista (CPF + senha)        |
 | GET    | `/auth/motorista/me`    | Perfil do motorista autenticado         |
 | POST   | `/auth/refresh`         | Novo access token (gestor ou motorista) |
-| GET    | `/motoristas`       | Lista motoristas                   |
-| POST   | `/motoristas`       | Cria motorista                     |
-| GET    | `/motoristas/:id`   | Detalha motorista                  |
-| PATCH  | `/motoristas/:id`   | Atualiza motorista                 |
-| DELETE | `/motoristas/:id`   | Inativa motorista (soft delete)    |
-| GET    | `/veiculos`         | Lista veículos                     |
-| POST   | `/veiculos`         | Cria veículo                       |
-| ...    | `/veiculos/:id`     | GET / PATCH / DELETE               |
-| GET    | `/unidades`         | Lista unidades próprias            |
-| POST   | `/unidades`         | Cria unidade                       |
-| ...    | `/unidades/:id`     | GET / PATCH / DELETE               |
-| GET    | `/nfs`              | Lista NFs (filtros + paginação)    |
-| POST   | `/nfs`              | Cria NF (com itens opcionais)      |
-| GET    | `/nfs/:id`          | Detalha NF (inclui itens)          |
-| PATCH  | `/nfs/:id`          | Atualiza NF / substitui itens      |
-| DELETE | `/nfs/:id`          | Remove NF (hard delete + cascata)  |
+| GET    | `/motoristas`           | Lista motoristas                        |
+| POST   | `/motoristas`           | Cria motorista                          |
+| GET    | `/motoristas/:id`       | Detalha motorista                       |
+| PATCH  | `/motoristas/:id`       | Atualiza motorista                      |
+| DELETE | `/motoristas/:id`       | Inativa motorista (soft delete)         |
+| GET    | `/veiculos`             | Lista veículos                          |
+| POST   | `/veiculos`             | Cria veículo                            |
+| ...    | `/veiculos/:id`         | GET / PATCH / DELETE                    |
+| GET    | `/unidades`             | Lista unidades próprias                 |
+| POST   | `/unidades`             | Cria unidade                            |
+| ...    | `/unidades/:id`         | GET / PATCH / DELETE                    |
+| GET    | `/nfs`                  | Lista NFs (filtros + paginação)         |
+| POST   | `/nfs`                  | Cria NF (com itens opcionais)           |
+| GET    | `/nfs/:id`              | Detalha NF (inclui itens)               |
+| PATCH  | `/nfs/:id`              | Atualiza NF / substitui itens           |
+| DELETE | `/nfs/:id`              | Remove NF (hard delete + cascata)       |
 
 **Filtros de `GET /nfs`** (query string, todos opcionais): `status`
 (`importada`/`alocada`/`em_viagem`/`entregue`), `destinatario_cnpj`,
@@ -97,18 +97,18 @@ envelope `{ data, total, limit, offset }`.
 
 ### Viagens e paradas (Sprint 3)
 
-| Método | Rota                                | Descrição                                   |
-| ------ | ----------------------------------- | ------------------------------------------- |
-| GET    | `/viagens`                          | Lista viagens (filtros + `paradas_count`)   |
-| POST   | `/viagens`                          | Cria viagem (com `nf_ids` → paradas)        |
-| GET    | `/viagens/:id`                      | Detalha viagem (veículo, motorista, paradas)|
-| PATCH  | `/viagens/:id`                      | Atualiza viagem (rota, km, veículo, etc.)   |
-| POST   | `/viagens/:id/iniciar`              | Inicia (marca `iniciada_em` + `km_inicial`) |
-| POST   | `/viagens/:id/encerrar`             | Encerra (marca `encerrada_em` + `km_final`) |
-| POST   | `/viagens/:id/cancelar`             | Cancela a viagem                            |
-| POST   | `/viagens/:id/paradas`              | Adiciona NF como parada                     |
-| PATCH  | `/viagens/:id/paradas/:paradaId`    | Atualiza parada (status, horários, ordem)   |
-| DELETE | `/viagens/:id/paradas/:paradaId`    | Remove parada da viagem                     |
+| Método | Rota                             | Descrição                                    |
+| ------ | -------------------------------- | -------------------------------------------- |
+| GET    | `/viagens`                       | Lista viagens (filtros + `paradas_count`)    |
+| POST   | `/viagens`                       | Cria viagem (com `nf_ids` → paradas)         |
+| GET    | `/viagens/:id`                   | Detalha viagem (veículo, motorista, paradas) |
+| PATCH  | `/viagens/:id`                   | Atualiza viagem (rota, km, veículo, etc.)    |
+| POST   | `/viagens/:id/iniciar`           | Inicia (marca `iniciada_em` + `km_inicial`)  |
+| POST   | `/viagens/:id/encerrar`          | Encerra (marca `encerrada_em` + `km_final`)  |
+| POST   | `/viagens/:id/cancelar`          | Cancela a viagem                             |
+| POST   | `/viagens/:id/paradas`           | Adiciona NF como parada                      |
+| PATCH  | `/viagens/:id/paradas/:paradaId` | Atualiza parada (status, horários, ordem)    |
+| DELETE | `/viagens/:id/paradas/:paradaId` | Remove parada da viagem                      |
 
 **Ciclo de vida:** uma viagem nasce `em_andamento` (sem `iniciada_em`).
 `iniciar` registra a partida; `encerrar` (exige viagem já iniciada e valida
@@ -124,15 +124,15 @@ remover a parada → NF não entregue volta a `importada`.
 
 ### Telemetria: GPS, rotas e alertas (Sprint 5)
 
-| Método | Rota                          | Quem    | Descrição                                  |
-| ------ | ----------------------------- | ------- | ------------------------------------------ |
-| GET    | `/app/viagens`                | app     | Viagens do motorista (em andamento 1º)     |
-| POST   | `/app/viagens/:id/posicoes`   | app     | Ingestão de posições GPS (lote)            |
-| GET    | `/viagens/:id/posicoes`       | gestor  | Trajeto da viagem (pontos ordenados)       |
-| GET    | `/viagens/:id/alertas`        | gestor  | Alertas de uma viagem                      |
-| GET    | `/alertas`                    | gestor  | Feed de alertas (filtros + paginação)      |
-| PATCH  | `/alertas/:id`                | gestor  | Marca alerta como visualizado              |
-| GET    | `/rotas` · POST · GET/PATCH/DELETE `/rotas/:id` | gestor | CRUD de rotas planejadas |
+| Método | Rota                                            | Quem   | Descrição                              |
+| ------ | ----------------------------------------------- | ------ | -------------------------------------- |
+| GET    | `/app/viagens`                                  | app    | Viagens do motorista (em andamento 1º) |
+| POST   | `/app/viagens/:id/posicoes`                     | app    | Ingestão de posições GPS (lote)        |
+| GET    | `/viagens/:id/posicoes`                         | gestor | Trajeto da viagem (pontos ordenados)   |
+| GET    | `/viagens/:id/alertas`                          | gestor | Alertas de uma viagem                  |
+| GET    | `/alertas`                                      | gestor | Feed de alertas (filtros + paginação)  |
+| PATCH  | `/alertas/:id`                                  | gestor | Marca alerta como visualizado          |
+| GET    | `/rotas` · POST · GET/PATCH/DELETE `/rotas/:id` | gestor | CRUD de rotas planejadas               |
 
 As rotas do **app** (`/api/app/*`) exigem token de **motorista**; as demais,
 de **gestor**.
@@ -140,7 +140,7 @@ de **gestor**.
 **Detecção de alertas (na ingestão de cada lote):** `velocidade_alta`
 (> 110 km/h), `desvio_rota` (distância à `linha` da rota > `raio_tolerancia_m`),
 `parada_longa` (parado em ~50 m por > 15 min) e `sem_gps` (intervalo entre
-pontos > 10 min). Há um *cooldown* de 5 min por tipo para evitar floods. Os
+pontos > 10 min). Há um _cooldown_ de 5 min por tipo para evitar floods. Os
 limiares são constantes em `gps.service.ts`.
 
 **Worker de `sem_gps` (detecção proativa):** a detecção acima é reativa (só
@@ -155,14 +155,14 @@ estiver disponível. Configurável por `WORKER_SEM_GPS_ENABLED` /
 
 ### Multas (Sprint 6)
 
-| Método | Rota                    | Descrição                                      |
-| ------ | ----------------------- | ---------------------------------------------- |
-| GET    | `/multas`               | Lista multas (filtros + paginação)             |
-| POST   | `/multas`               | Cria multa (com vínculo automático)            |
-| GET    | `/multas/:id`           | Detalha multa                                  |
-| PATCH  | `/multas/:id`           | Atualiza (status de pagamento/revisão, etc.)   |
-| POST   | `/multas/:id/revincular`| Re-roda o vínculo automático                   |
-| DELETE | `/multas/:id`           | Remove multa (hard delete)                     |
+| Método | Rota                     | Descrição                                    |
+| ------ | ------------------------ | -------------------------------------------- |
+| GET    | `/multas`                | Lista multas (filtros + paginação)           |
+| POST   | `/multas`                | Cria multa (com vínculo automático)          |
+| GET    | `/multas/:id`            | Detalha multa                                |
+| PATCH  | `/multas/:id`            | Atualiza (status de pagamento/revisão, etc.) |
+| POST   | `/multas/:id/revincular` | Re-roda o vínculo automático                 |
+| DELETE | `/multas/:id`            | Remove multa (hard delete)                   |
 
 Na criação, informe `veiculo_id` **ou** `placa` (resolvida para o veículo). Se
 houver veículo + `ocorrida_em`, o sistema busca a viagem que estava em curso
@@ -177,10 +177,10 @@ quando a viagem é cadastrada depois da multa). **Filtros de `GET /multas`**:
 
 ### Integração NF-e (Sprint 7)
 
-| Método | Rota             | Descrição                                            |
-| ------ | ---------------- | ---------------------------------------------------- |
-| POST   | `/nfs/importar`  | Importa NF-e a partir do XML (`{ "xml": "<...>" }`)  |
-| POST   | `/nfs/sefaz`     | Consulta a NF-e na SEFAZ por chave e importa         |
+| Método | Rota            | Descrição                                           |
+| ------ | --------------- | --------------------------------------------------- |
+| POST   | `/nfs/importar` | Importa NF-e a partir do XML (`{ "xml": "<...>" }`) |
+| POST   | `/nfs/sefaz`    | Consulta a NF-e na SEFAZ por chave e importa        |
 
 O parser de XML (`src/integrations/nfe/parser.ts`) extrai chave, número, série,
 CFOP, emissão, destinatário/endereço, valor, peso e itens, e reaproveita o
@@ -188,7 +188,7 @@ CFOP, emissão, destinatário/endereço, valor, peso e itens, e reaproveita o
 Há um XML de exemplo em [`samples/nfe-exemplo.xml`](./samples/nfe-exemplo.xml).
 
 **SEFAZ — pronta para configurar:** `POST /nfs/sefaz` usa o mesmo parser, mas
-busca o XML na SEFAZ via mTLS com o certificado A1. O *plumbing* (config,
+busca o XML na SEFAZ via mTLS com o certificado A1. O _plumbing_ (config,
 carregamento do `.pfx`, agente mTLS, endpoint por UF) está pronto em
 `src/integrations/sefaz/client.ts`; falta apenas integrar a chamada do web
 service (NFeDistribuicaoDFe), que depende do seu CNPJ/UF — por isso o endpoint
@@ -205,6 +205,7 @@ definida em `docker-compose.prod.yml`. O Nginx serve o front (build do Vite) e
 faz proxy de `/api` e `/health` para a API — tudo na **mesma origem** (sem CORS).
 
 **Imagens:**
+
 - `Dockerfile` (raiz) — API multi-stage: compila o TS e roda só com deps de
   produção, como usuário não-root. O `docker-entrypoint.sh` aplica as
   migrations e o seed do admin (idempotente) antes de subir o servidor.
@@ -300,4 +301,7 @@ npm test
 - **`bcryptjs`** (JS puro) em vez de `bcrypt` para evitar compilação nativa no
   Windows.
 - **Certificado A1 (.pfx)** nunca deve ser versionado — já está no `.gitignore`.
+
+```
+
 ```

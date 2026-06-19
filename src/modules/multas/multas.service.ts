@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
+import { MontadorUpdate, MontadorWhere } from '../../db/sql';
 import type { CreateMultaInput, ListMultasQuery, UpdateMultaInput } from './multas.schemas';
 
 interface MultaRow {
@@ -87,56 +88,33 @@ export interface ListMultasResult {
 }
 
 export async function list(empresaId: string, q: ListMultasQuery): Promise<ListMultasResult> {
-  const where: string[] = ['m.empresa_id = $1'];
-  const values: unknown[] = [empresaId];
-  let i = 2;
+  const w = new MontadorWhere();
+  w.add(`m.empresa_id = ${w.ph(empresaId)}`);
 
-  if (q.status_pagamento) {
-    where.push(`m.status_pagamento = $${i++}`);
-    values.push(q.status_pagamento);
-  }
-  if (q.status_revisao) {
-    where.push(`m.status_revisao = $${i++}`);
-    values.push(q.status_revisao);
-  }
-  if (q.fonte) {
-    where.push(`m.fonte = $${i++}`);
-    values.push(q.fonte);
-  }
-  if (q.veiculo_id) {
-    where.push(`m.veiculo_id = $${i++}`);
-    values.push(q.veiculo_id);
-  }
-  if (q.motorista_id) {
-    where.push(`m.motorista_id = $${i++}`);
-    values.push(q.motorista_id);
-  }
-  if (q.de) {
-    where.push(`m.ocorrida_em >= $${i++}`);
-    values.push(q.de);
-  }
-  if (q.ate) {
-    where.push(`m.ocorrida_em <= $${i++}`);
-    values.push(q.ate);
-  }
+  if (q.status_pagamento) w.add(`m.status_pagamento = ${w.ph(q.status_pagamento)}`);
+  if (q.status_revisao) w.add(`m.status_revisao = ${w.ph(q.status_revisao)}`);
+  if (q.fonte) w.add(`m.fonte = ${w.ph(q.fonte)}`);
+  if (q.veiculo_id) w.add(`m.veiculo_id = ${w.ph(q.veiculo_id)}`);
+  if (q.motorista_id) w.add(`m.motorista_id = ${w.ph(q.motorista_id)}`);
+  if (q.de) w.add(`m.ocorrida_em >= ${w.ph(q.de)}`);
+  if (q.ate) w.add(`m.ocorrida_em <= ${w.ph(q.ate)}`);
   if (q.busca) {
-    where.push(`(m.numero_auto ILIKE $${i} OR m.tipo ILIKE $${i})`);
-    values.push(`%${q.busca}%`);
-    i++;
+    const p = w.ph(`%${q.busca}%`);
+    w.add(`(m.numero_auto ILIKE ${p} OR m.tipo ILIKE ${p})`);
   }
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereSql = w.whereSql;
 
   const totalRow = await queryOne<{ total: number }>(
     `SELECT COUNT(*)::int AS total ${FROM} ${whereSql}`,
-    values,
+    w.valores,
   );
 
   const rows = await query<MultaRow>(
     `SELECT ${SELECT_COLS} ${FROM} ${whereSql}
      ORDER BY m.ocorrida_em DESC NULLS LAST, m.criado_em DESC
-     LIMIT $${i++} OFFSET $${i++}`,
-    [...values, q.limit, q.offset],
+     LIMIT ${w.ph(q.limit)} OFFSET ${w.ph(q.offset)}`,
+    w.valores,
   );
 
   return {
@@ -266,43 +244,43 @@ export async function create(empresaId: string, input: CreateMultaInput): Promis
   }
 }
 
-export async function update(empresaId: string, id: string, input: UpdateMultaInput): Promise<Multa> {
+export async function update(
+  empresaId: string,
+  id: string,
+  input: UpdateMultaInput,
+): Promise<Multa> {
   await getById(empresaId, id);
 
-  const sets: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
-  const assign = (expr: string, value: unknown) => {
-    values.push(value);
-    sets.push(`${expr} = $${i++}`);
-  };
+  const u = new MontadorUpdate();
 
-  if (input.veiculo_id !== undefined) assign('veiculo_id', input.veiculo_id);
-  if (input.motorista_id !== undefined) assign('motorista_id', input.motorista_id);
-  if (input.viagem_id !== undefined) assign('viagem_id', input.viagem_id);
-  if (input.ocorrida_em !== undefined) assign('ocorrida_em', input.ocorrida_em);
-  if (input.tipo !== undefined) assign('tipo', input.tipo);
-  if (input.valor !== undefined) assign('valor', input.valor);
-  if (input.pontos_cnh !== undefined) assign('pontos_cnh', input.pontos_cnh);
-  if (input.local !== undefined) assign('local', input.local);
-  if (input.status_pagamento !== undefined) assign('status_pagamento', input.status_pagamento);
-  if (input.status_revisao !== undefined) assign('status_revisao', input.status_revisao);
+  if (input.veiculo_id !== undefined) u.set('veiculo_id', input.veiculo_id);
+  if (input.motorista_id !== undefined) u.set('motorista_id', input.motorista_id);
+  if (input.viagem_id !== undefined) u.set('viagem_id', input.viagem_id);
+  if (input.ocorrida_em !== undefined) u.set('ocorrida_em', input.ocorrida_em);
+  if (input.tipo !== undefined) u.set('tipo', input.tipo);
+  if (input.valor !== undefined) u.set('valor', input.valor);
+  if (input.pontos_cnh !== undefined) u.set('pontos_cnh', input.pontos_cnh);
+  if (input.local !== undefined) u.set('local', input.local);
+  if (input.status_pagamento !== undefined) u.set('status_pagamento', input.status_pagamento);
+  if (input.status_revisao !== undefined) u.set('status_revisao', input.status_revisao);
   if (input.coordenada !== undefined) {
     if (input.coordenada === null) {
-      sets.push('coordenada = NULL');
+      u.setExpr('coordenada = NULL');
     } else {
-      values.push(input.coordenada.lng);
-      const lngIdx = i++;
-      values.push(input.coordenada.lat);
-      const latIdx = i++;
-      sets.push(`coordenada = ST_SetSRID(ST_MakePoint($${lngIdx}, $${latIdx}), 4326)::geography`);
+      u.setExpr(
+        `coordenada = ST_SetSRID(ST_MakePoint(${u.ph(input.coordenada.lng)}, ${u.ph(input.coordenada.lat)}), 4326)::geography`,
+      );
     }
   }
 
-  if (sets.length === 0) return getById(empresaId, id);
+  if (u.vazio) return getById(empresaId, id);
 
-  values.push(id, empresaId);
-  await queryOne(`UPDATE multas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`, values);
+  const idPh = u.ph(id);
+  const empPh = u.ph(empresaId);
+  await queryOne(
+    `UPDATE multas SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh}`,
+    u.valores,
+  );
   return getById(empresaId, id);
 }
 

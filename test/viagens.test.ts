@@ -1,12 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  api,
-  bearer,
-  criarMotorista,
-  criarNf,
-  criarVeiculo,
-  loginGestor,
-} from './helpers';
+import { api, bearer, criarMotorista, criarNf, criarVeiculo, loginGestor } from './helpers';
 
 describe('viagens + paradas', () => {
   let token: string;

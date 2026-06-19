@@ -24,7 +24,12 @@ appRouter.post(
   '/viagens/:id/posicoes',
   validate({ params: idParamSchema, body: ingestPosicoesSchema }),
   asyncHandler(async (req, res) => {
-    const result = await service.ingestPosicoes(req.user!.empresaId, req.params.id!, req.user!.sub, req.body);
+    const result = await service.ingestPosicoes(
+      req.user!.empresaId,
+      req.params.id!,
+      req.user!.sub,
+      req.body,
+    );
     res.status(201).json(result);
   }),
 );
@@ -35,7 +40,11 @@ appRouter.post(
   '/posicoes',
   validate({ body: ingestPosicoesSchema }),
   asyncHandler(async (req, res) => {
-    const result = await service.ingestPosicoesViagemAtual(req.user!.empresaId, req.user!.sub, req.body);
+    const result = await service.ingestPosicoesViagemAtual(
+      req.user!.empresaId,
+      req.user!.sub,
+      req.body,
+    );
     res.status(201).json(result);
   }),
 );
@@ -54,7 +63,8 @@ deviceRouter.post(
     // a query (?token=) segue como reserva para apps que só sabem mandar URL.
     const header = req.headers.authorization;
     const tokenHeader = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-    const tokenCustom = typeof req.headers['x-device-token'] === 'string' ? req.headers['x-device-token'] : '';
+    const tokenCustom =
+      typeof req.headers['x-device-token'] === 'string' ? req.headers['x-device-token'] : '';
     const tokenQuery = typeof req.query.token === 'string' ? req.query.token : '';
     const token = tokenHeader || tokenCustom || tokenQuery;
     let motoristaId: string | null = null;
@@ -73,6 +83,8 @@ deviceRouter.post(
       return;
     }
     const result = await service.ingestOverland(empresaId, motoristaId, req.body);
-    res.status(200).json({ result: 'ok', inseridas: result.inseridas, alertas: result.alertas.length });
+    res
+      .status(200)
+      .json({ result: 'ok', inseridas: result.inseridas, alertas: result.alertas.length });
   }),
 );

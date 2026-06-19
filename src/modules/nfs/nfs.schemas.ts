@@ -34,10 +34,7 @@ const nfBase = {
 };
 
 export const createNfSchema = z.object({
-  chave_acesso: z
-    .string()
-    .trim()
-    .regex(chaveAcessoRegex, 'Chave de acesso deve ter 44 dígitos'),
+  chave_acesso: z.string().trim().regex(chaveAcessoRegex, 'Chave de acesso deve ter 44 dígitos'),
   ...nfBase,
   // Itens opcionais na criação; substituídos por completo se enviados no update.
   itens: z.array(itemNfSchema).optional(),

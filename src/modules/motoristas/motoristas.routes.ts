@@ -2,11 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { requireAuth, requireUsuario, tenantId } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
-import {
-  createMotoristaSchema,
-  idParamSchema,
-  updateMotoristaSchema,
-} from './motoristas.schemas';
+import { createMotoristaSchema, idParamSchema, updateMotoristaSchema } from './motoristas.schemas';
 import * as service from './motoristas.service';
 
 export const motoristasRouter = Router();

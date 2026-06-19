@@ -119,7 +119,9 @@ viagensRouter.patch(
   '/:id/paradas/:paradaId',
   validate({ params: paradaParamsSchema, body: updateParadaSchema }),
   asyncHandler(async (req, res) => {
-    res.json(await service.updateParada(tenantId(req), req.params.id!, req.params.paradaId!, req.body));
+    res.json(
+      await service.updateParada(tenantId(req), req.params.id!, req.params.paradaId!, req.body),
+    );
   }),
 );
 

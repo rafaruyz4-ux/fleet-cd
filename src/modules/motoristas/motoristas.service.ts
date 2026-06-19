@@ -1,5 +1,6 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
+import { MontadorUpdate } from '../../db/sql';
 import { hashPassword } from '../../utils/password';
 import { signDeviceToken } from '../../utils/jwt';
 import { env } from '../../config/env';
@@ -65,36 +66,34 @@ export async function create(empresaId: string, input: CreateMotoristaInput): Pr
   return row!;
 }
 
-export async function update(empresaId: string, id: string, input: UpdateMotoristaInput): Promise<Motorista> {
+export async function update(
+  empresaId: string,
+  id: string,
+  input: UpdateMotoristaInput,
+): Promise<Motorista> {
   // Garante que existe (e dá 404 claro antes de montar o UPDATE).
   await getById(empresaId, id);
 
-  const sets: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
+  const u = new MontadorUpdate();
 
-  const assign = (col: string, value: unknown) => {
-    sets.push(`${col} = $${i++}`);
-    values.push(value);
-  };
+  if (input.nome !== undefined) u.set('nome', input.nome);
+  if (input.cpf !== undefined) u.set('cpf', input.cpf);
+  if (input.cnh !== undefined) u.set('cnh', input.cnh);
+  if (input.categoria_cnh !== undefined) u.set('categoria_cnh', input.categoria_cnh);
+  if (input.validade_cnh !== undefined) u.set('validade_cnh', input.validade_cnh);
+  if (input.telefone !== undefined) u.set('telefone', input.telefone);
+  if (input.ativo !== undefined) u.set('ativo', input.ativo);
+  if (input.senha !== undefined) u.set('senha_hash', await hashPassword(input.senha));
 
-  if (input.nome !== undefined) assign('nome', input.nome);
-  if (input.cpf !== undefined) assign('cpf', input.cpf);
-  if (input.cnh !== undefined) assign('cnh', input.cnh);
-  if (input.categoria_cnh !== undefined) assign('categoria_cnh', input.categoria_cnh);
-  if (input.validade_cnh !== undefined) assign('validade_cnh', input.validade_cnh);
-  if (input.telefone !== undefined) assign('telefone', input.telefone);
-  if (input.ativo !== undefined) assign('ativo', input.ativo);
-  if (input.senha !== undefined) assign('senha_hash', await hashPassword(input.senha));
-
-  if (sets.length === 0) {
+  if (u.vazio) {
     return getById(empresaId, id);
   }
 
-  values.push(id, empresaId);
+  const idPh = u.ph(id);
+  const empPh = u.ph(empresaId);
   const row = await queryOne<Motorista>(
-    `UPDATE motoristas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${PUBLIC_COLS}`,
-    values,
+    `UPDATE motoristas SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh} RETURNING ${PUBLIC_COLS}`,
+    u.valores,
   );
   return row!;
 }

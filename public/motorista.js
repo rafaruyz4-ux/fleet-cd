@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 // Página de teste do "app do motorista": faz login (CPF+senha), lista as
 // viagens do motorista e, na viagem em_andamento escolhida, lê o GPS do
@@ -26,30 +26,30 @@
     return document.getElementById(id);
   }
   var views = {
-    login: $("view-login"),
-    viagens: $("view-viagens"),
-    track: $("view-track"),
+    login: $('view-login'),
+    viagens: $('view-viagens'),
+    track: $('view-track'),
   };
 
   function show(view) {
-    views.login.hidden = view !== "login";
-    views.viagens.hidden = view !== "viagens";
-    views.track.hidden = view !== "track";
+    views.login.hidden = view !== 'login';
+    views.viagens.hidden = view !== 'viagens';
+    views.track.hidden = view !== 'track';
   }
 
   function setConn(on) {
-    $("conn-dot").classList.toggle("on", !!on);
+    $('conn-dot').classList.toggle('on', !!on);
   }
 
   function logLine(msg, kind) {
-    var li = document.createElement("li");
+    var li = document.createElement('li');
     if (kind) li.className = kind;
     var t = new Date();
-    var hh = String(t.getHours()).padStart(2, "0");
-    var mm = String(t.getMinutes()).padStart(2, "0");
-    var ss = String(t.getSeconds()).padStart(2, "0");
-    li.textContent = "[" + hh + ":" + mm + ":" + ss + "] " + msg;
-    var log = $("log");
+    var hh = String(t.getHours()).padStart(2, '0');
+    var mm = String(t.getMinutes()).padStart(2, '0');
+    var ss = String(t.getSeconds()).padStart(2, '0');
+    li.textContent = '[' + hh + ':' + mm + ':' + ss + '] ' + msg;
+    var log = $('log');
     log.insertBefore(li, log.firstChild);
   }
 
@@ -58,43 +58,49 @@
     state.accessToken = at;
     state.refreshToken = rt;
     try {
-      localStorage.setItem("mot_at", at);
-      localStorage.setItem("mot_rt", rt);
-    } catch (e) {}
+      localStorage.setItem('mot_at', at);
+      localStorage.setItem('mot_rt', rt);
+    } catch {
+      /* localStorage pode falhar (modo privado/quota) — seguir sem persistir */
+    }
   }
   function loadTokens() {
     try {
-      state.accessToken = localStorage.getItem("mot_at");
-      state.refreshToken = localStorage.getItem("mot_rt");
-    } catch (e) {}
+      state.accessToken = localStorage.getItem('mot_at');
+      state.refreshToken = localStorage.getItem('mot_rt');
+    } catch {
+      /* localStorage pode falhar (modo privado/quota) — seguir sem persistir */
+    }
   }
   function clearTokens() {
     state.accessToken = null;
     state.refreshToken = null;
     try {
-      localStorage.removeItem("mot_at");
-      localStorage.removeItem("mot_rt");
-    } catch (e) {}
+      localStorage.removeItem('mot_at');
+      localStorage.removeItem('mot_rt');
+    } catch {
+      /* localStorage pode falhar (modo privado/quota) — seguir sem persistir */
+    }
   }
 
   // --- API helper com refresh automático (1x) em 401 ---
   function apiFetch(path, options, _retry) {
     options = options || {};
     var headers = Object.assign({}, options.headers || {});
-    if (state.accessToken) headers["Authorization"] = "Bearer " + state.accessToken;
-    if (options.body) headers["Content-Type"] = "application/json";
+    if (state.accessToken) headers['Authorization'] = 'Bearer ' + state.accessToken;
+    if (options.body) headers['Content-Type'] = 'application/json';
     // Evita a página de aviso do ngrok grátis em requisições XHR (no-op fora do ngrok).
-    headers["ngrok-skip-browser-warning"] = "true";
+    headers['ngrok-skip-browser-warning'] = 'true';
 
     return fetch(path, Object.assign({}, options, { headers: headers })).then(function (res) {
       if (res.status === 401 && state.refreshToken && !_retry) {
-        return fetch("/api/auth/refresh", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        return fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: state.refreshToken }),
         })
           .then(function (r) {
-            if (!r.ok) throw new Error("sessao_expirada");
+            if (!r.ok) throw new Error('sessao_expirada');
             return r.json();
           })
           .then(function (data) {
@@ -110,10 +116,10 @@
     return res
       .json()
       .then(function (j) {
-        return j.error || j.message || "Erro " + res.status;
+        return j.error || j.message || 'Erro ' + res.status;
       })
       .catch(function () {
-        return "Erro " + res.status;
+        return 'Erro ' + res.status;
       });
   }
 
@@ -121,39 +127,42 @@
   // LOGIN
   // ---------------------------------------------------------------
   function doLogin() {
-    var cpf = $("cpf").value.trim();
-    var senha = $("senha").value;
-    var erro = $("login-erro");
+    var cpf = $('cpf').value.trim();
+    var senha = $('senha').value;
+    var erro = $('login-erro');
     erro.hidden = true;
     if (!cpf || !senha) {
-      erro.textContent = "Informe CPF e senha.";
+      erro.textContent = 'Informe CPF e senha.';
       erro.hidden = false;
       return;
     }
-    var btn = $("btn-login");
+    var btn = $('btn-login');
     btn.disabled = true;
-    btn.textContent = "Entrando...";
+    btn.textContent = 'Entrando...';
 
-    apiFetch("/api/auth/motorista/login", {
-      method: "POST",
+    apiFetch('/api/auth/motorista/login', {
+      method: 'POST',
       body: JSON.stringify({ cpf: cpf, senha: senha }),
     })
       .then(function (res) {
-        if (!res.ok) return readError(res).then(function (m) { throw new Error(m); });
+        if (!res.ok)
+          return readError(res).then(function (m) {
+            throw new Error(m);
+          });
         return res.json();
       })
       .then(function (data) {
         saveTokens(data.accessToken, data.refreshToken);
-        $("senha").value = "";
+        $('senha').value = '';
         loadViagens();
       })
       .catch(function (e) {
-        erro.textContent = e.message || "Falha no login.";
+        erro.textContent = e.message || 'Falha no login.';
         erro.hidden = false;
       })
       .finally(function () {
         btn.disabled = false;
-        btn.textContent = "Entrar";
+        btn.textContent = 'Entrar';
       });
   }
 
@@ -161,60 +170,66 @@
   // VIAGENS
   // ---------------------------------------------------------------
   function loadViagens() {
-    apiFetch("/api/app/viagens")
+    apiFetch('/api/app/viagens')
       .then(function (res) {
         if (res.status === 401 || res.status === 403) {
           clearTokens();
-          show("login");
-          throw new Error("faça login");
+          show('login');
+          throw new Error('faça login');
         }
-        if (!res.ok) return readError(res).then(function (m) { throw new Error(m); });
+        if (!res.ok)
+          return readError(res).then(function (m) {
+            throw new Error(m);
+          });
         return res.json();
       })
       .then(function (viagens) {
         renderViagens(viagens || []);
-        show("viagens");
+        show('viagens');
       })
       .catch(function (e) {
-        logLine(e.message, "err");
+        logLine(e.message, 'err');
       });
   }
 
   function renderViagens(viagens) {
-    var ul = $("lista-viagens");
-    ul.innerHTML = "";
-    $("viagens-vazio").hidden = viagens.length > 0;
+    var ul = $('lista-viagens');
+    ul.innerHTML = '';
+    $('viagens-vazio').hidden = viagens.length > 0;
 
     viagens.forEach(function (v) {
-      var li = document.createElement("li");
-      var emAndamento = v.status === "em_andamento";
+      var li = document.createElement('li');
+      var emAndamento = v.status === 'em_andamento';
 
-      var placa = document.createElement("div");
-      placa.className = "placa";
-      placa.textContent = v.veiculo_placa || "(sem placa)";
+      var placa = document.createElement('div');
+      placa.className = 'placa';
+      placa.textContent = v.veiculo_placa || '(sem placa)';
 
-      var badge = document.createElement("span");
-      badge.className = "badge " + (emAndamento ? "em_andamento" : "outro");
+      var badge = document.createElement('span');
+      badge.className = 'badge ' + (emAndamento ? 'em_andamento' : 'outro');
       badge.textContent = v.status;
-      placa.appendChild(document.createTextNode(" "));
+      placa.appendChild(document.createTextNode(' '));
       placa.appendChild(badge);
 
-      var meta = document.createElement("div");
-      meta.className = "meta";
+      var meta = document.createElement('div');
+      meta.className = 'meta';
       meta.textContent =
-        v.paradas_count + " parada(s) · " +
-        (v.iniciada_em ? "iniciada " + new Date(v.iniciada_em).toLocaleString("pt-BR") : "não iniciada");
+        v.paradas_count +
+        ' parada(s) · ' +
+        (v.iniciada_em
+          ? 'iniciada ' + new Date(v.iniciada_em).toLocaleString('pt-BR')
+          : 'não iniciada');
 
       li.appendChild(placa);
       li.appendChild(meta);
 
       if (emAndamento) {
-        li.addEventListener("click", function () {
+        li.addEventListener('click', function () {
           selecionarViagem(v);
         });
       } else {
-        li.style.opacity = "0.55";
-        li.title = "Só viagens em_andamento aceitam GPS";
+        li.style.opacity = '0.55';
+        li.title = 'Só viagens em_andamento aceitam GPS';
       }
       ul.appendChild(li);
     });
@@ -228,43 +243,43 @@
     state.enviadas = 0;
     state.alertas = 0;
     state.buffer = [];
-    $("track-titulo").textContent = "Viagem · " + (v.veiculo_placa || "");
-    $("m-enviadas").textContent = "0";
-    $("m-buffer").textContent = "0";
-    $("m-alertas").textContent = "0";
-    $("m-precisao").textContent = "—";
-    $("m-coords").textContent = "Sem posição ainda";
-    $("log").innerHTML = "";
+    $('track-titulo').textContent = 'Viagem · ' + (v.veiculo_placa || '');
+    $('m-enviadas').textContent = '0';
+    $('m-buffer').textContent = '0';
+    $('m-alertas').textContent = '0';
+    $('m-precisao').textContent = '—';
+    $('m-coords').textContent = 'Sem posição ainda';
+    $('log').innerHTML = '';
     setTrackingUI(false);
-    show("track");
+    show('track');
   }
 
   function setTrackingUI(on) {
-    var st = $("track-status");
-    st.textContent = on ? "Rastreando…" : "Parado";
-    st.classList.toggle("tracking", on);
-    $("btn-start").hidden = on;
-    $("btn-stop").hidden = !on;
+    var st = $('track-status');
+    st.textContent = on ? 'Rastreando…' : 'Parado';
+    st.classList.toggle('tracking', on);
+    $('btn-start').hidden = on;
+    $('btn-stop').hidden = !on;
     setConn(on);
   }
 
   function startTracking() {
-    var erro = $("track-erro");
+    var erro = $('track-erro');
     erro.hidden = true;
-    if (!("geolocation" in navigator)) {
-      erro.textContent = "Este navegador não expõe geolocalização.";
+    if (!('geolocation' in navigator)) {
+      erro.textContent = 'Este navegador não expõe geolocalização.';
       erro.hidden = false;
       return;
     }
 
-    state.watchId = navigator.geolocation.watchPosition(
-      onPosition,
-      onGeoError,
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-    );
+    state.watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 20000,
+    });
     state.flushTimer = setInterval(flush, FLUSH_MS);
     setTrackingUI(true);
-    logLine("rastreio iniciado", "ok");
+    logLine('rastreio iniciado', 'ok');
   }
 
   function stopTracking() {
@@ -278,7 +293,7 @@
     }
     setTrackingUI(false);
     flush(); // envia o que sobrou
-    logLine("rastreio parado", "ok");
+    logLine('rastreio parado', 'ok');
   }
 
   function onPosition(pos) {
@@ -297,23 +312,23 @@
     }
 
     state.buffer.push(ponto);
-    $("m-buffer").textContent = String(state.buffer.length);
-    $("m-coords").textContent = ponto.lat.toFixed(6) + ", " + ponto.lng.toFixed(6);
-    $("m-precisao").textContent = ponto.precisao_m != null ? ponto.precisao_m + " m" : "—";
+    $('m-buffer').textContent = String(state.buffer.length);
+    $('m-coords').textContent = ponto.lat.toFixed(6) + ', ' + ponto.lng.toFixed(6);
+    $('m-precisao').textContent = ponto.precisao_m != null ? ponto.precisao_m + ' m' : '—';
 
     if (state.buffer.length >= MAX_BUFFER) flush();
   }
 
   function onGeoError(err) {
     var msgs = {
-      1: "Permissão de localização negada. Autorize o acesso ao GPS.",
-      2: "Posição indisponível (sem sinal de GPS).",
-      3: "Tempo esgotado ao obter posição.",
+      1: 'Permissão de localização negada. Autorize o acesso ao GPS.',
+      2: 'Posição indisponível (sem sinal de GPS).',
+      3: 'Tempo esgotado ao obter posição.',
     };
-    var erro = $("track-erro");
+    var erro = $('track-erro');
     erro.textContent = msgs[err.code] || err.message;
     erro.hidden = false;
-    logLine("geo erro: " + (msgs[err.code] || err.message), "err");
+    logLine('geo erro: ' + (msgs[err.code] || err.message), 'err');
   }
 
   function flush() {
@@ -321,33 +336,43 @@
     state.flushing = true;
 
     var lote = state.buffer.splice(0, state.buffer.length);
-    $("m-buffer").textContent = "0";
+    $('m-buffer').textContent = '0';
 
-    apiFetch("/api/app/viagens/" + state.viagem.id + "/posicoes", {
-      method: "POST",
+    apiFetch('/api/app/viagens/' + state.viagem.id + '/posicoes', {
+      method: 'POST',
       body: JSON.stringify({ posicoes: lote }),
     })
       .then(function (res) {
         if (!res.ok) {
-          return readError(res).then(function (m) { throw new Error(m); });
+          return readError(res).then(function (m) {
+            throw new Error(m);
+          });
         }
         return res.json();
       })
       .then(function (r) {
         state.enviadas += r.inseridas || lote.length;
         state.alertas += (r.alertas && r.alertas.length) || 0;
-        $("m-enviadas").textContent = String(state.enviadas);
-        $("m-alertas").textContent = String(state.alertas);
-        var extra = r.alertas && r.alertas.length
-          ? " · " + r.alertas.length + " alerta(s): " + r.alertas.map(function (a) { return a.tipo; }).join(", ")
-          : "";
-        logLine("enviadas " + lote.length + " posição(ões)" + extra, "ok");
+        $('m-enviadas').textContent = String(state.enviadas);
+        $('m-alertas').textContent = String(state.alertas);
+        var extra =
+          r.alertas && r.alertas.length
+            ? ' · ' +
+              r.alertas.length +
+              ' alerta(s): ' +
+              r.alertas
+                .map(function (a) {
+                  return a.tipo;
+                })
+                .join(', ')
+            : '';
+        logLine('enviadas ' + lote.length + ' posição(ões)' + extra, 'ok');
       })
       .catch(function (e) {
         // devolve o lote ao buffer para tentar de novo no próximo flush
         state.buffer = lote.concat(state.buffer);
-        $("m-buffer").textContent = String(state.buffer.length);
-        logLine("falha ao enviar: " + e.message, "err");
+        $('m-buffer').textContent = String(state.buffer.length);
+        logLine('falha ao enviar: ' + e.message, 'err');
       })
       .finally(function () {
         state.flushing = false;
@@ -357,30 +382,30 @@
   function sair() {
     if (state.watchId != null) stopTracking();
     clearTokens();
-    show("login");
+    show('login');
   }
 
   // ---------------------------------------------------------------
   // wiring
   // ---------------------------------------------------------------
-  $("btn-login").addEventListener("click", doLogin);
-  $("senha").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") doLogin();
+  $('btn-login').addEventListener('click', doLogin);
+  $('senha').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') doLogin();
   });
-  $("btn-reload").addEventListener("click", loadViagens);
-  $("btn-sair").addEventListener("click", sair);
-  $("btn-voltar").addEventListener("click", function () {
+  $('btn-reload').addEventListener('click', loadViagens);
+  $('btn-sair').addEventListener('click', sair);
+  $('btn-voltar').addEventListener('click', function () {
     if (state.watchId != null) stopTracking();
     loadViagens();
   });
-  $("btn-start").addEventListener("click", startTracking);
-  $("btn-stop").addEventListener("click", stopTracking);
+  $('btn-start').addEventListener('click', startTracking);
+  $('btn-stop').addEventListener('click', stopTracking);
 
   // avisa se o usuário sair com rastreio ligado
-  window.addEventListener("beforeunload", function (e) {
+  window.addEventListener('beforeunload', function (e) {
     if (state.watchId != null) {
       e.preventDefault();
-      e.returnValue = "";
+      e.returnValue = '';
     }
   });
 
@@ -389,6 +414,6 @@
   if (state.accessToken) {
     loadViagens();
   } else {
-    show("login");
+    show('login');
   }
 })();

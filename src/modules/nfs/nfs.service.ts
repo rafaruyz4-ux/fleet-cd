@@ -1,12 +1,8 @@
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
-import type {
-  CreateNfInput,
-  ItemNfInput,
-  ListNfsQuery,
-  UpdateNfInput,
-} from './nfs.schemas';
+import { MontadorUpdate, MontadorWhere } from '../../db/sql';
+import type { CreateNfInput, ItemNfInput, ListNfsQuery, UpdateNfInput } from './nfs.schemas';
 
 // Extrai lat/lng do GEOGRAPHY como colunas planas (mesmo padrão de unidades).
 const SELECT_COLS = `
@@ -110,48 +106,41 @@ export interface ListNfsResult {
 }
 
 export async function list(empresaId: string, q: ListNfsQuery): Promise<ListNfsResult> {
-  const where: string[] = ['empresa_id = $1'];
-  const values: unknown[] = [empresaId];
-  let i = 2;
+  const w = new MontadorWhere();
+  w.add(`empresa_id = ${w.ph(empresaId)}`);
 
   if (q.status) {
-    where.push(`status = $${i++}`);
-    values.push(q.status);
+    w.add(`status = ${w.ph(q.status)}`);
   }
   if (q.destinatario_cnpj) {
-    where.push(`destinatario_cnpj = $${i++}`);
-    values.push(q.destinatario_cnpj);
+    w.add(`destinatario_cnpj = ${w.ph(q.destinatario_cnpj)}`);
   }
   if (q.unidade_propria_id) {
-    where.push(`unidade_propria_id = $${i++}`);
-    values.push(q.unidade_propria_id);
+    w.add(`unidade_propria_id = ${w.ph(q.unidade_propria_id)}`);
   }
   if (q.de) {
-    where.push(`emitida_em >= $${i++}`);
-    values.push(q.de);
+    w.add(`emitida_em >= ${w.ph(q.de)}`);
   }
   if (q.ate) {
-    where.push(`emitida_em <= $${i++}`);
-    values.push(q.ate);
+    w.add(`emitida_em <= ${w.ph(q.ate)}`);
   }
   if (q.busca) {
-    where.push(`(numero ILIKE $${i} OR destinatario_nome ILIKE $${i})`);
-    values.push(`%${q.busca}%`);
-    i++;
+    const p = w.ph(`%${q.busca}%`);
+    w.add(`(numero ILIKE ${p} OR destinatario_nome ILIKE ${p})`);
   }
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereSql = w.whereSql;
 
   const totalRow = await queryOne<{ total: string }>(
     `SELECT COUNT(*)::int AS total FROM notas_fiscais ${whereSql}`,
-    values,
+    w.valores,
   );
 
   const rows = await query<NfRow>(
     `SELECT ${SELECT_COLS} FROM notas_fiscais ${whereSql}
      ORDER BY emitida_em DESC NULLS LAST, criado_em DESC
-     LIMIT $${i++} OFFSET $${i++}`,
-    [...values, q.limit, q.offset],
+     LIMIT ${w.ph(q.limit)} OFFSET ${w.ph(q.offset)}`,
+    w.valores,
   );
 
   return {
@@ -271,47 +260,40 @@ export async function update(empresaId: string, id: string, input: UpdateNfInput
   await getById(empresaId, id);
 
   return withTransaction(async (client) => {
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    let i = 1;
-    const assign = (expr: string, value: unknown) => {
-      values.push(value);
-      sets.push(`${expr} = $${i++}`);
-    };
+    const u = new MontadorUpdate();
 
-    if (input.numero !== undefined) assign('numero', input.numero ?? null);
-    if (input.serie !== undefined) assign('serie', input.serie ?? null);
-    if (input.cfop !== undefined) assign('cfop', input.cfop ?? null);
-    if (input.emitida_em !== undefined) assign('emitida_em', input.emitida_em ?? null);
+    if (input.numero !== undefined) u.set('numero', input.numero ?? null);
+    if (input.serie !== undefined) u.set('serie', input.serie ?? null);
+    if (input.cfop !== undefined) u.set('cfop', input.cfop ?? null);
+    if (input.emitida_em !== undefined) u.set('emitida_em', input.emitida_em ?? null);
     if (input.destinatario_cnpj !== undefined)
-      assign('destinatario_cnpj', input.destinatario_cnpj ?? null);
+      u.set('destinatario_cnpj', input.destinatario_cnpj ?? null);
     if (input.destinatario_nome !== undefined)
-      assign('destinatario_nome', input.destinatario_nome ?? null);
+      u.set('destinatario_nome', input.destinatario_nome ?? null);
     if (input.destinatario_endereco !== undefined)
-      assign('destinatario_endereco', input.destinatario_endereco ?? null);
+      u.set('destinatario_endereco', input.destinatario_endereco ?? null);
     if (input.unidade_propria_id !== undefined)
-      assign('unidade_propria_id', input.unidade_propria_id ?? null);
-    if (input.valor_total !== undefined) assign('valor_total', input.valor_total ?? null);
-    if (input.peso_kg !== undefined) assign('peso_kg', input.peso_kg ?? null);
-    if (input.xml_path !== undefined) assign('xml_path', input.xml_path ?? null);
-    if (input.status !== undefined) assign('status', input.status);
+      u.set('unidade_propria_id', input.unidade_propria_id ?? null);
+    if (input.valor_total !== undefined) u.set('valor_total', input.valor_total ?? null);
+    if (input.peso_kg !== undefined) u.set('peso_kg', input.peso_kg ?? null);
+    if (input.xml_path !== undefined) u.set('xml_path', input.xml_path ?? null);
+    if (input.status !== undefined) u.set('status', input.status);
     if (input.coordenada !== undefined) {
       if (input.coordenada === null) {
-        sets.push('coordenada = NULL');
+        u.setExpr('coordenada = NULL');
       } else {
-        values.push(input.coordenada.lng);
-        const lngIdx = i++;
-        values.push(input.coordenada.lat);
-        const latIdx = i++;
-        sets.push(`coordenada = ${pointExpr(lngIdx, latIdx)}`);
+        const lngPh = u.ph(input.coordenada.lng);
+        const latPh = u.ph(input.coordenada.lat);
+        u.setExpr(`coordenada = ST_SetSRID(ST_MakePoint(${lngPh}, ${latPh}), 4326)::geography`);
       }
     }
 
-    if (sets.length > 0) {
-      values.push(id, empresaId);
+    if (!u.vazio) {
+      const idPh = u.ph(id);
+      const empPh = u.ph(empresaId);
       await client.query(
-        `UPDATE notas_fiscais SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`,
-        values,
+        `UPDATE notas_fiscais SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh}`,
+        u.valores,
       );
     }
 

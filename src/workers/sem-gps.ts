@@ -17,7 +17,9 @@ export interface SemGpsAlerta {
  * não re-alerta enquanto não chegar uma nova posição (o alerta anterior já
  * cobre o silêncio atual). Devolve os alertas criados nesta passada.
  */
-export async function detectarSemGps(limiteMin = env.workerSemGps.limiteMin): Promise<SemGpsAlerta[]> {
+export async function detectarSemGps(
+  limiteMin = env.workerSemGps.limiteMin,
+): Promise<SemGpsAlerta[]> {
   return query<SemGpsAlerta>(
     `
     WITH candidatas AS (

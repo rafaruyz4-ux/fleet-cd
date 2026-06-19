@@ -1,5 +1,6 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
+import { MontadorWhere } from '../../db/sql';
 import type { ListAlertasQuery } from './alertas.schemas';
 
 interface AlertaRow {
@@ -46,35 +47,27 @@ export interface ListAlertasResult {
 }
 
 export async function list(empresaId: string, q: ListAlertasQuery): Promise<ListAlertasResult> {
-  const where: string[] = ['empresa_id = $1'];
-  const values: unknown[] = [empresaId];
-  let i = 2;
+  const w = new MontadorWhere();
+  w.add(`empresa_id = ${w.ph(empresaId)}`);
 
-  if (q.visualizado !== undefined) {
-    where.push(`visualizado = $${i++}`);
-    values.push(q.visualizado);
-  }
-  if (q.tipo) {
-    where.push(`tipo = $${i++}`);
-    values.push(q.tipo);
-  }
-  if (q.viagem_id) {
-    where.push(`viagem_id = $${i++}`);
-    values.push(q.viagem_id);
-  }
+  if (q.visualizado !== undefined) w.add(`visualizado = ${w.ph(q.visualizado)}`);
+  if (q.tipo) w.add(`tipo = ${w.ph(q.tipo)}`);
+  if (q.viagem_id) w.add(`viagem_id = ${w.ph(q.viagem_id)}`);
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereSql = w.whereSql;
 
   const totalRow = await queryOne<{ total: number }>(
     `SELECT COUNT(*)::int AS total FROM alertas ${whereSql}`,
-    values,
+    w.valores,
   );
 
+  const limitPh = w.ph(q.limit);
+  const offsetPh = w.ph(q.offset);
   const rows = await query<AlertaRow>(
     `SELECT ${SELECT_COLS} FROM alertas ${whereSql}
      ORDER BY criado_em DESC
-     LIMIT $${i++} OFFSET $${i++}`,
-    [...values, q.limit, q.offset],
+     LIMIT ${limitPh} OFFSET ${offsetPh}`,
+    w.valores,
   );
 
   return {
@@ -93,7 +86,11 @@ export async function listByViagem(empresaId: string, viagemId: string): Promise
   return rows.map(toAlerta);
 }
 
-export async function marcarVisualizado(empresaId: string, id: string, visualizado: boolean): Promise<Alerta> {
+export async function marcarVisualizado(
+  empresaId: string,
+  id: string,
+  visualizado: boolean,
+): Promise<Alerta> {
   const row = await queryOne<AlertaRow>(
     `UPDATE alertas SET visualizado = $1 WHERE id = $2 AND empresa_id = $3 RETURNING ${SELECT_COLS}`,
     [visualizado, id, empresaId],

@@ -1,6 +1,7 @@
 import type { PoolClient, QueryResultRow } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
+import { MontadorUpdate, MontadorWhere } from '../../db/sql';
 import type {
   AddParadaInput,
   CreateViagemInput,
@@ -57,7 +58,7 @@ interface ParadaRow {
   nf_status: string | null;
 }
 
-export interface Parada extends ParadaRow {}
+export type Parada = ParadaRow;
 export interface Viagem extends ViagemRow {
   paradas?: Parada[];
 }
@@ -90,7 +91,11 @@ const PARADA_SELECT = `
 // ---------------------------------------------------------------------
 // Leituras
 // ---------------------------------------------------------------------
-async function fetchViagemRow(run: Runner, empresaId: string, id: string): Promise<ViagemRow | null> {
+async function fetchViagemRow(
+  run: Runner,
+  empresaId: string,
+  id: string,
+): Promise<ViagemRow | null> {
   const rows = await run<ViagemRow>(
     `SELECT ${VIAGEM_COLS} ${VIAGEM_FROM} WHERE v.id = $1 AND v.empresa_id = $2`,
     [id, empresaId],
@@ -124,36 +129,20 @@ export interface ListViagensResult {
 }
 
 export async function list(empresaId: string, q: ListViagensQuery): Promise<ListViagensResult> {
-  const where: string[] = ['v.empresa_id = $1'];
-  const values: unknown[] = [empresaId];
-  let i = 2;
+  const w = new MontadorWhere();
+  w.add(`v.empresa_id = ${w.ph(empresaId)}`);
 
-  if (q.status) {
-    where.push(`v.status = $${i++}`);
-    values.push(q.status);
-  }
-  if (q.veiculo_id) {
-    where.push(`v.veiculo_id = $${i++}`);
-    values.push(q.veiculo_id);
-  }
-  if (q.motorista_id) {
-    where.push(`v.motorista_id = $${i++}`);
-    values.push(q.motorista_id);
-  }
-  if (q.de) {
-    where.push(`v.criado_em >= $${i++}`);
-    values.push(q.de);
-  }
-  if (q.ate) {
-    where.push(`v.criado_em <= $${i++}`);
-    values.push(q.ate);
-  }
+  if (q.status) w.add(`v.status = ${w.ph(q.status)}`);
+  if (q.veiculo_id) w.add(`v.veiculo_id = ${w.ph(q.veiculo_id)}`);
+  if (q.motorista_id) w.add(`v.motorista_id = ${w.ph(q.motorista_id)}`);
+  if (q.de) w.add(`v.criado_em >= ${w.ph(q.de)}`);
+  if (q.ate) w.add(`v.criado_em <= ${w.ph(q.ate)}`);
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereSql = w.whereSql;
 
   const totalRow = await queryOne<{ total: number }>(
     `SELECT COUNT(*)::int AS total ${VIAGEM_FROM} ${whereSql}`,
-    values,
+    w.valores,
   );
 
   const rows = await query<ViagemRow>(
@@ -161,8 +150,8 @@ export async function list(empresaId: string, q: ListViagensQuery): Promise<List
             (SELECT COUNT(*)::int FROM paradas WHERE viagem_id = v.id) AS paradas_count
      ${VIAGEM_FROM} ${whereSql}
      ORDER BY v.criado_em DESC
-     LIMIT $${i++} OFFSET $${i++}`,
-    [...values, q.limit, q.offset],
+     LIMIT ${w.ph(q.limit)} OFFSET ${w.ph(q.offset)}`,
+    w.valores,
   );
 
   return {
@@ -185,7 +174,11 @@ async function assertVeiculoDisponivel(run: Runner, empresaId: string, id: strin
   if (!rows[0].ativo) throw AppError.badRequest('Veículo inativo não pode receber viagem');
 }
 
-async function assertMotoristaDisponivel(run: Runner, empresaId: string, id: string): Promise<void> {
+async function assertMotoristaDisponivel(
+  run: Runner,
+  empresaId: string,
+  id: string,
+): Promise<void> {
   const rows = await run<{ ativo: boolean }>(
     'SELECT ativo FROM motoristas WHERE id = $1 AND empresa_id = $2',
     [id, empresaId],
@@ -259,33 +252,37 @@ export async function create(empresaId: string, input: CreateViagemInput): Promi
   });
 }
 
-export async function update(empresaId: string, id: string, input: UpdateViagemInput): Promise<Viagem> {
+export async function update(
+  empresaId: string,
+  id: string,
+  input: UpdateViagemInput,
+): Promise<Viagem> {
   const atual = await fetchViagemRow(poolRunner, empresaId, id);
   if (!atual) throw AppError.notFound('Viagem não encontrada');
 
   return withTransaction(async (client) => {
     const run = clientRunner(client);
 
-    if (input.veiculo_id !== undefined) await assertVeiculoDisponivel(run, empresaId, input.veiculo_id);
-    if (input.motorista_id !== undefined) await assertMotoristaDisponivel(run, empresaId, input.motorista_id);
+    if (input.veiculo_id !== undefined)
+      await assertVeiculoDisponivel(run, empresaId, input.veiculo_id);
+    if (input.motorista_id !== undefined)
+      await assertMotoristaDisponivel(run, empresaId, input.motorista_id);
 
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    let i = 1;
-    const assign = (col: string, value: unknown) => {
-      values.push(value);
-      sets.push(`${col} = $${i++}`);
-    };
+    const u = new MontadorUpdate();
 
-    if (input.veiculo_id !== undefined) assign('veiculo_id', input.veiculo_id);
-    if (input.motorista_id !== undefined) assign('motorista_id', input.motorista_id);
-    if (input.rota_planejada_id !== undefined) assign('rota_planejada_id', input.rota_planejada_id);
-    if (input.km_inicial !== undefined) assign('km_inicial', input.km_inicial);
-    if (input.km_final !== undefined) assign('km_final', input.km_final);
+    if (input.veiculo_id !== undefined) u.set('veiculo_id', input.veiculo_id);
+    if (input.motorista_id !== undefined) u.set('motorista_id', input.motorista_id);
+    if (input.rota_planejada_id !== undefined) u.set('rota_planejada_id', input.rota_planejada_id);
+    if (input.km_inicial !== undefined) u.set('km_inicial', input.km_inicial);
+    if (input.km_final !== undefined) u.set('km_final', input.km_final);
 
-    if (sets.length > 0) {
-      values.push(id, empresaId);
-      await run(`UPDATE viagens SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`, values);
+    if (!u.vazio) {
+      const idPh = u.ph(id);
+      const empPh = u.ph(empresaId);
+      await run(
+        `UPDATE viagens SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh}`,
+        u.valores,
+      );
     }
 
     return getViagemComParadas(run, empresaId, id);
@@ -295,7 +292,11 @@ export async function update(empresaId: string, id: string, input: UpdateViagemI
 // ---------------------------------------------------------------------
 // Ciclo de vida
 // ---------------------------------------------------------------------
-export async function iniciar(empresaId: string, id: string, input: IniciarViagemInput): Promise<Viagem> {
+export async function iniciar(
+  empresaId: string,
+  id: string,
+  input: IniciarViagemInput,
+): Promise<Viagem> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, id);
@@ -326,7 +327,11 @@ export async function iniciar(empresaId: string, id: string, input: IniciarViage
   });
 }
 
-export async function encerrar(empresaId: string, id: string, input: EncerrarViagemInput): Promise<Viagem> {
+export async function encerrar(
+  empresaId: string,
+  id: string,
+  input: EncerrarViagemInput,
+): Promise<Viagem> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, id);
@@ -367,7 +372,10 @@ export async function cancelar(empresaId: string, id: string): Promise<Viagem> {
       throw AppError.badRequest('Viagem já está cancelada');
     }
 
-    await run(`UPDATE viagens SET status = 'cancelada' WHERE id = $1 AND empresa_id = $2`, [id, empresaId]);
+    await run(`UPDATE viagens SET status = 'cancelada' WHERE id = $1 AND empresa_id = $2`, [
+      id,
+      empresaId,
+    ]);
     // Devolve as NFs não entregues ao estado "importada".
     await run(
       `UPDATE notas_fiscais SET status = 'importada'
@@ -383,7 +391,11 @@ export async function cancelar(empresaId: string, id: string): Promise<Viagem> {
 // ---------------------------------------------------------------------
 // Paradas
 // ---------------------------------------------------------------------
-export async function addParada(empresaId: string, viagemId: string, input: AddParadaInput): Promise<Parada> {
+export async function addParada(
+  empresaId: string,
+  viagemId: string,
+  input: AddParadaInput,
+): Promise<Parada> {
   return withTransaction(async (client) => {
     const run = clientRunner(client);
     const viagem = await fetchViagemRow(run, empresaId, viagemId);
@@ -432,28 +444,27 @@ export async function updateParada(
     const parada = existentes[0];
     if (!parada) throw AppError.notFound('Parada não encontrada nesta viagem');
 
-    const sets: string[] = [];
-    const values: unknown[] = [];
-    let i = 1;
-    const assign = (col: string, value: unknown) => {
-      values.push(value);
-      sets.push(`${col} = $${i++}`);
-    };
+    const u = new MontadorUpdate();
 
-    if (input.status !== undefined) assign('status', input.status);
-    if (input.ordem !== undefined) assign('ordem', input.ordem);
-    if (input.chegada_prevista !== undefined) assign('chegada_prevista', input.chegada_prevista);
-    if (input.chegada_real !== undefined) assign('chegada_real', input.chegada_real);
-    if (input.saida_real !== undefined) assign('saida_real', input.saida_real);
+    if (input.status !== undefined) u.set('status', input.status);
+    if (input.ordem !== undefined) u.set('ordem', input.ordem);
+    if (input.chegada_prevista !== undefined) u.set('chegada_prevista', input.chegada_prevista);
+    if (input.chegada_real !== undefined) u.set('chegada_real', input.chegada_real);
+    if (input.saida_real !== undefined) u.set('saida_real', input.saida_real);
 
     // Ao marcar entregue, registra a chegada (se ausente) e conclui a NF.
     if (input.status === 'entregue') {
-      if (input.chegada_real === undefined) sets.push('chegada_real = COALESCE(chegada_real, now())');
+      if (input.chegada_real === undefined)
+        u.setExpr('chegada_real = COALESCE(chegada_real, now())');
     }
 
-    if (sets.length > 0) {
-      values.push(paradaId, empresaId);
-      await run(`UPDATE paradas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1}`, values);
+    if (!u.vazio) {
+      const idPh = u.ph(paradaId);
+      const empPh = u.ph(empresaId);
+      await run(
+        `UPDATE paradas SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh}`,
+        u.valores,
+      );
     }
 
     if (input.status === 'entregue' && parada.nf_id) {
@@ -468,7 +479,11 @@ export async function updateParada(
   });
 }
 
-export async function removeParada(empresaId: string, viagemId: string, paradaId: string): Promise<void> {
+export async function removeParada(
+  empresaId: string,
+  viagemId: string,
+  paradaId: string,
+): Promise<void> {
   await withTransaction(async (client) => {
     const run = clientRunner(client);
     const rows = await run<{ nf_id: string | null }>(

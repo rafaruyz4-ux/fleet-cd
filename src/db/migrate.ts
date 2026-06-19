@@ -51,7 +51,9 @@ async function migrate(): Promise<void> {
   }
 
   console.log(
-    count === 0 ? '[migrate] nada a aplicar — banco já atualizado.' : `[migrate] ${count} migration(s) aplicada(s).`,
+    count === 0
+      ? '[migrate] nada a aplicar — banco já atualizado.'
+      : `[migrate] ${count} migration(s) aplicada(s).`,
   );
 }
 

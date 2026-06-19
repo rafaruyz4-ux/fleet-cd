@@ -24,15 +24,16 @@ async function seed(): Promise<void> {
     [EMPRESA_PADRAO_ID],
   );
 
-  const existing = await queryOne<{ id: string }>(
-    'SELECT id FROM usuarios WHERE email = $1',
-    [env.seedAdmin.email],
-  );
+  const existing = await queryOne<{ id: string }>('SELECT id FROM usuarios WHERE email = $1', [
+    env.seedAdmin.email,
+  ]);
 
   if (existing) {
     // Garante que a conta da equipe seja super admin (backoffice), mesmo em
     // bancos criados antes da migration 004.
-    await pool.query('UPDATE usuarios SET super_admin = TRUE WHERE email = $1', [env.seedAdmin.email]);
+    await pool.query('UPDATE usuarios SET super_admin = TRUE WHERE email = $1', [
+      env.seedAdmin.email,
+    ]);
     console.log(`[seed] usuário admin já existe (super admin garantido): ${env.seedAdmin.email}`);
     return;
   }

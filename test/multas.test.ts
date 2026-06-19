@@ -1,12 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  api,
-  bearer,
-  criarMotorista,
-  criarVeiculo,
-  loginGestor,
-  numeroAutoUnico,
-} from './helpers';
+import { api, bearer, criarMotorista, criarVeiculo, loginGestor, numeroAutoUnico } from './helpers';
 
 describe('multas + vínculo automático', () => {
   let token: string;
@@ -36,15 +29,12 @@ describe('multas + vínculo automático', () => {
 
   it('multa dentro da janela vincula viagem + motorista (auto_vinculada)', async () => {
     const { veiculo, motorista, viagem } = await viagemNaJanela();
-    const res = await api()
-      .post('/api/multas')
-      .set('Authorization', h())
-      .send({
-        numero_auto: numeroAutoUnico(),
-        veiculo_id: veiculo,
-        ocorrida_em: '2026-05-28T10:00:00Z',
-        valor: 195.23,
-      });
+    const res = await api().post('/api/multas').set('Authorization', h()).send({
+      numero_auto: numeroAutoUnico(),
+      veiculo_id: veiculo,
+      ocorrida_em: '2026-05-28T10:00:00Z',
+      valor: 195.23,
+    });
     expect(res.status).toBe(201);
     expect(res.body.status_revisao).toBe('auto_vinculada');
     expect(res.body.viagem_id).toBe(viagem);
@@ -57,7 +47,11 @@ describe('multas + vínculo automático', () => {
     const res = await api()
       .post('/api/multas')
       .set('Authorization', h())
-      .send({ numero_auto: numeroAutoUnico(), veiculo_id: veiculo, ocorrida_em: '2026-05-28T20:00:00Z' });
+      .send({
+        numero_auto: numeroAutoUnico(),
+        veiculo_id: veiculo,
+        ocorrida_em: '2026-05-28T20:00:00Z',
+      });
     expect(res.body.status_revisao).toBe('aguardando_revisao');
     expect(res.body.viagem_id).toBeNull();
   });
@@ -65,19 +59,35 @@ describe('multas + vínculo automático', () => {
   it('resolve por placa e numero_auto duplicado → 409', async () => {
     const veiculo = await criarVeiculo(token, { placa: 'XYZ9A88' });
     const num = numeroAutoUnico();
-    const r1 = await api().post('/api/multas').set('Authorization', h()).send({ numero_auto: num, placa: 'xyz9a88' });
+    const r1 = await api()
+      .post('/api/multas')
+      .set('Authorization', h())
+      .send({ numero_auto: num, placa: 'xyz9a88' });
     expect(r1.status).toBe(201);
     expect(r1.body.veiculo_id).toBe(veiculo);
-    const r2 = await api().post('/api/multas').set('Authorization', h()).send({ numero_auto: num, placa: 'XYZ9A88' });
+    const r2 = await api()
+      .post('/api/multas')
+      .set('Authorization', h())
+      .send({ numero_auto: num, placa: 'XYZ9A88' });
     expect(r2.status).toBe(409);
   });
 
   it('placa inexistente → 400; sem veículo/placa → 400', async () => {
     expect(
-      (await api().post('/api/multas').set('Authorization', h()).send({ numero_auto: numeroAutoUnico(), placa: 'ZZZ9Z99' })).status,
+      (
+        await api()
+          .post('/api/multas')
+          .set('Authorization', h())
+          .send({ numero_auto: numeroAutoUnico(), placa: 'ZZZ9Z99' })
+      ).status,
     ).toBe(400);
     expect(
-      (await api().post('/api/multas').set('Authorization', h()).send({ numero_auto: numeroAutoUnico() })).status,
+      (
+        await api()
+          .post('/api/multas')
+          .set('Authorization', h())
+          .send({ numero_auto: numeroAutoUnico() })
+      ).status,
     ).toBe(400);
   });
 
@@ -88,17 +98,29 @@ describe('multas + vínculo automático', () => {
     const multa = await api()
       .post('/api/multas')
       .set('Authorization', h())
-      .send({ numero_auto: numeroAutoUnico(), veiculo_id: veiculo, ocorrida_em: '2026-05-29T09:30:00Z' });
+      .send({
+        numero_auto: numeroAutoUnico(),
+        veiculo_id: veiculo,
+        ocorrida_em: '2026-05-29T09:30:00Z',
+      });
     expect(multa.body.status_revisao).toBe('aguardando_revisao');
 
     const v = await api()
       .post('/api/viagens')
       .set('Authorization', h())
       .send({ veiculo_id: veiculo, motorista_id: motorista });
-    await api().post(`/api/viagens/${v.body.id}/iniciar`).set('Authorization', h()).send({ iniciada_em: '2026-05-29T09:00:00Z' });
-    await api().post(`/api/viagens/${v.body.id}/encerrar`).set('Authorization', h()).send({ encerrada_em: '2026-05-29T11:00:00Z' });
+    await api()
+      .post(`/api/viagens/${v.body.id}/iniciar`)
+      .set('Authorization', h())
+      .send({ iniciada_em: '2026-05-29T09:00:00Z' });
+    await api()
+      .post(`/api/viagens/${v.body.id}/encerrar`)
+      .set('Authorization', h())
+      .send({ encerrada_em: '2026-05-29T11:00:00Z' });
 
-    const re = await api().post(`/api/multas/${multa.body.id}/revincular`).set('Authorization', h());
+    const re = await api()
+      .post(`/api/multas/${multa.body.id}/revincular`)
+      .set('Authorization', h());
     expect(re.body.status_revisao).toBe('auto_vinculada');
     expect(re.body.viagem_id).toBe(v.body.id);
   });

@@ -21,9 +21,7 @@ export async function pingBanco(timeoutMs = 2_000): Promise<boolean> {
   try {
     await Promise.race([
       pool.query('SELECT 1'),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), timeoutMs).unref(),
-      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs).unref()),
     ]);
     return true;
   } catch {
@@ -50,9 +48,7 @@ export async function queryOne<T extends QueryResultRow = QueryResultRow>(
 }
 
 /** Roda uma função dentro de uma transação, com COMMIT/ROLLBACK automáticos. */
-export async function withTransaction<T>(
-  fn: (client: PoolClient) => Promise<T>,
-): Promise<T> {
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

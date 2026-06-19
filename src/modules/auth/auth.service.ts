@@ -38,7 +38,13 @@ interface UsuarioAuthResult {
 }
 
 function usuarioToPublico(row: UsuarioRow): UsuarioPublico {
-  return { id: row.id, nome: row.nome, email: row.email, papel: row.papel, superAdmin: row.super_admin };
+  return {
+    id: row.id,
+    nome: row.nome,
+    email: row.email,
+    papel: row.papel,
+    superAdmin: row.super_admin,
+  };
 }
 
 function usuarioPayload(row: UsuarioRow): UsuarioTokenPayload {
@@ -113,7 +119,11 @@ interface MotoristaAuthResult {
   refreshToken: string;
 }
 
-function motoristaPayload(row: { id: string; cpf: string; empresa_id: string }): MotoristaTokenPayload {
+function motoristaPayload(row: {
+  id: string;
+  cpf: string;
+  empresa_id: string;
+}): MotoristaTokenPayload {
   return { sub: row.id, tipo: 'motorista', empresaId: row.empresa_id, cpf: row.cpf };
 }
 
@@ -168,10 +178,15 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
   }
 
   if (payload.tipo === 'motorista') {
-    const row = await queryOne<{ id: string; cpf: string; senha_hash: string | null; empresa_id: string; ativo: boolean }>(
-      'SELECT id, cpf, senha_hash, empresa_id, ativo FROM motoristas WHERE id = $1',
-      [payload.sub],
-    );
+    const row = await queryOne<{
+      id: string;
+      cpf: string;
+      senha_hash: string | null;
+      empresa_id: string;
+      ativo: boolean;
+    }>('SELECT id, cpf, senha_hash, empresa_id, ativo FROM motoristas WHERE id = $1', [
+      payload.sub,
+    ]);
     if (!row || !row.ativo || !row.senha_hash) {
       throw AppError.unauthorized('Motorista não encontrado ou sem acesso');
     }

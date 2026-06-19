@@ -1,5 +1,6 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
+import { MontadorUpdate } from '../../db/sql';
 import type { CreateVeiculoInput, UpdateVeiculoInput } from './veiculos.schemas';
 
 const COLS = `id, placa, modelo, tipo, capacidade_kg, renavam, ativo, criado_em, updated_at`;
@@ -17,7 +18,9 @@ export interface Veiculo {
 }
 
 export function list(empresaId: string): Promise<Veiculo[]> {
-  return query<Veiculo>(`SELECT ${COLS} FROM veiculos WHERE empresa_id = $1 ORDER BY placa`, [empresaId]);
+  return query<Veiculo>(`SELECT ${COLS} FROM veiculos WHERE empresa_id = $1 ORDER BY placa`, [
+    empresaId,
+  ]);
 }
 
 export async function getById(empresaId: string, id: string): Promise<Veiculo> {
@@ -49,32 +52,31 @@ export async function create(empresaId: string, input: CreateVeiculoInput): Prom
   return row!;
 }
 
-export async function update(empresaId: string, id: string, input: UpdateVeiculoInput): Promise<Veiculo> {
+export async function update(
+  empresaId: string,
+  id: string,
+  input: UpdateVeiculoInput,
+): Promise<Veiculo> {
   await getById(empresaId, id);
 
-  const sets: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
-  const assign = (col: string, value: unknown) => {
-    sets.push(`${col} = $${i++}`);
-    values.push(value);
-  };
+  const u = new MontadorUpdate();
 
-  if (input.placa !== undefined) assign('placa', input.placa);
-  if (input.modelo !== undefined) assign('modelo', input.modelo);
-  if (input.tipo !== undefined) assign('tipo', input.tipo);
-  if (input.capacidade_kg !== undefined) assign('capacidade_kg', input.capacidade_kg);
-  if (input.renavam !== undefined) assign('renavam', input.renavam);
-  if (input.ativo !== undefined) assign('ativo', input.ativo);
+  if (input.placa !== undefined) u.set('placa', input.placa);
+  if (input.modelo !== undefined) u.set('modelo', input.modelo);
+  if (input.tipo !== undefined) u.set('tipo', input.tipo);
+  if (input.capacidade_kg !== undefined) u.set('capacidade_kg', input.capacidade_kg);
+  if (input.renavam !== undefined) u.set('renavam', input.renavam);
+  if (input.ativo !== undefined) u.set('ativo', input.ativo);
 
-  if (sets.length === 0) {
+  if (u.vazio) {
     return getById(empresaId, id);
   }
 
-  values.push(id, empresaId);
+  const idPh = u.ph(id);
+  const empPh = u.ph(empresaId);
   const row = await queryOne<Veiculo>(
-    `UPDATE veiculos SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${COLS}`,
-    values,
+    `UPDATE veiculos SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh} RETURNING ${COLS}`,
+    u.valores,
   );
   return row!;
 }

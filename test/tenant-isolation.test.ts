@@ -30,15 +30,25 @@ describe('isolamento entre empresas (multi-tenant)', () => {
     expect(lista.status).toBe(200);
     expect(lista.body.find((v: { id: string }) => v.id === veiculoA)).toBeUndefined();
 
-    expect((await api().get(`/api/veiculos/${veiculoA}`).set('Authorization', B())).status).toBe(404);
+    expect((await api().get(`/api/veiculos/${veiculoA}`).set('Authorization', B())).status).toBe(
+      404,
+    );
     expect(
-      (await api().patch(`/api/veiculos/${veiculoA}`).set('Authorization', B()).send({ modelo: 'X' }))
-        .status,
+      (
+        await api()
+          .patch(`/api/veiculos/${veiculoA}`)
+          .set('Authorization', B())
+          .send({ modelo: 'X' })
+      ).status,
     ).toBe(404);
-    expect((await api().delete(`/api/veiculos/${veiculoA}`).set('Authorization', B())).status).toBe(404);
+    expect((await api().delete(`/api/veiculos/${veiculoA}`).set('Authorization', B())).status).toBe(
+      404,
+    );
 
     // A continua enxergando o próprio veículo.
-    expect((await api().get(`/api/veiculos/${veiculoA}`).set('Authorization', A())).status).toBe(200);
+    expect((await api().get(`/api/veiculos/${veiculoA}`).set('Authorization', A())).status).toBe(
+      200,
+    );
   });
 
   it('NFs: B não enxerga a NF de A', async () => {

@@ -1,5 +1,6 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
+import { MontadorUpdate } from '../../db/sql';
 import type { CreateRotaInput, UpdateRotaInput } from './rotas.schemas';
 
 interface LineStringGeoJSON {
@@ -39,8 +40,7 @@ function toRota(row: RotaRow): Rota {
   const { linha_geojson, ...rest } = row;
   return {
     ...rest,
-    linha:
-      linha_geojson?.coordinates.map(([lng, lat]) => ({ lat, lng })) ?? null,
+    linha: linha_geojson?.coordinates.map(([lng, lat]) => ({ lat, lng })) ?? null,
   };
 }
 
@@ -90,33 +90,25 @@ export async function create(empresaId: string, input: CreateRotaInput): Promise
 export async function update(empresaId: string, id: string, input: UpdateRotaInput): Promise<Rota> {
   await getById(empresaId, id);
 
-  const sets: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
-  const assign = (expr: string, value: unknown) => {
-    values.push(value);
-    sets.push(`${expr} = $${i++}`);
-  };
+  const u = new MontadorUpdate();
 
-  if (input.tipo !== undefined) assign('tipo', input.tipo);
-  if (input.nome !== undefined) assign('nome', input.nome);
-  if (input.raio_tolerancia_m !== undefined) assign('raio_tolerancia_m', input.raio_tolerancia_m);
+  if (input.tipo !== undefined) u.set('tipo', input.tipo);
+  if (input.nome !== undefined) u.set('nome', input.nome);
+  if (input.raio_tolerancia_m !== undefined) u.set('raio_tolerancia_m', input.raio_tolerancia_m);
   if (input.duracao_estimada_min !== undefined)
-    assign('duracao_estimada_min', input.duracao_estimada_min);
+    u.set('duracao_estimada_min', input.duracao_estimada_min);
   if (input.linha !== undefined) {
-    values.push(input.linha ? toLinestringWkt(input.linha) : null);
-    sets.push(
-      `linha = CASE WHEN $${i}::text IS NULL THEN NULL ELSE ST_GeogFromText($${i}) END`,
-    );
-    i++;
+    const p = u.ph(input.linha ? toLinestringWkt(input.linha) : null);
+    u.setExpr(`linha = CASE WHEN ${p}::text IS NULL THEN NULL ELSE ST_GeogFromText(${p}) END`);
   }
 
-  if (sets.length === 0) return getById(empresaId, id);
+  if (u.vazio) return getById(empresaId, id);
 
-  values.push(id, empresaId);
+  const idPh = u.ph(id);
+  const empPh = u.ph(empresaId);
   const row = await queryOne<RotaRow>(
-    `UPDATE rotas_planejadas SET ${sets.join(', ')} WHERE id = $${i} AND empresa_id = $${i + 1} RETURNING ${SELECT_COLS}`,
-    values,
+    `UPDATE rotas_planejadas SET ${u.sql} WHERE id = ${idPh} AND empresa_id = ${empPh} RETURNING ${SELECT_COLS}`,
+    u.valores,
   );
   return toRota(row!);
 }

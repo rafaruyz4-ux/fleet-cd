@@ -9,7 +9,9 @@ describe('auth — gestor', () => {
   });
 
   it('login válido retorna tokens e perfil', async () => {
-    const res = await api().post('/api/auth/login').send({ email: ADMIN_EMAIL, senha: ADMIN_SENHA });
+    const res = await api()
+      .post('/api/auth/login')
+      .send({ email: ADMIN_EMAIL, senha: ADMIN_SENHA });
     expect(res.status).toBe(200);
     expect(res.body.accessToken).toBeTruthy();
     expect(res.body.refreshToken).toBeTruthy();
@@ -28,8 +30,12 @@ describe('auth — gestor', () => {
   });
 
   it('refresh emite novo access token', async () => {
-    const login = await api().post('/api/auth/login').send({ email: ADMIN_EMAIL, senha: ADMIN_SENHA });
-    const res = await api().post('/api/auth/refresh').send({ refreshToken: login.body.refreshToken });
+    const login = await api()
+      .post('/api/auth/login')
+      .send({ email: ADMIN_EMAIL, senha: ADMIN_SENHA });
+    const res = await api()
+      .post('/api/auth/refresh')
+      .send({ refreshToken: login.body.refreshToken });
     expect(res.status).toBe(200);
     expect(res.body.accessToken).toBeTruthy();
   });
@@ -72,13 +78,21 @@ describe('auth — isolamento de principais', () => {
   });
 
   it('motorista não acessa o dashboard (403)', async () => {
-    expect((await api().get('/api/veiculos').set('Authorization', bearer(motorista))).status).toBe(403);
-    expect((await api().get('/api/auth/me').set('Authorization', bearer(motorista))).status).toBe(403);
+    expect((await api().get('/api/veiculos').set('Authorization', bearer(motorista))).status).toBe(
+      403,
+    );
+    expect((await api().get('/api/auth/me').set('Authorization', bearer(motorista))).status).toBe(
+      403,
+    );
   });
 
   it('gestor não acessa rotas do app (403)', async () => {
-    expect((await api().get('/api/app/viagens').set('Authorization', bearer(gestor))).status).toBe(403);
-    expect((await api().get('/api/auth/motorista/me').set('Authorization', bearer(gestor))).status).toBe(403);
+    expect((await api().get('/api/app/viagens').set('Authorization', bearer(gestor))).status).toBe(
+      403,
+    );
+    expect(
+      (await api().get('/api/auth/motorista/me').set('Authorization', bearer(gestor))).status,
+    ).toBe(403);
   });
 
   it('sem token → 401; token inválido → 401', async () => {

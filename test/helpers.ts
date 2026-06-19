@@ -15,7 +15,8 @@ export function bearer(token: string): string {
 
 export async function loginGestor(): Promise<string> {
   const res = await api().post('/api/auth/login').send({ email: ADMIN_EMAIL, senha: ADMIN_SENHA });
-  if (!res.body.accessToken) throw new Error(`login gestor falhou: ${res.status} ${JSON.stringify(res.body)}`);
+  if (!res.body.accessToken)
+    throw new Error(`login gestor falhou: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body.accessToken;
 }
 
@@ -63,7 +64,10 @@ export function numeroAutoUnico(): string {
 }
 
 // ----- fábricas (exigem token de gestor) -----
-export async function criarVeiculo(token: string, over: Record<string, unknown> = {}): Promise<string> {
+export async function criarVeiculo(
+  token: string,
+  over: Record<string, unknown> = {},
+): Promise<string> {
   const res = await api()
     .post('/api/veiculos')
     .set('Authorization', bearer(token))

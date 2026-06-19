@@ -19,7 +19,10 @@ describe('worker — detecção de sem_gps', () => {
       .post('/api/viagens')
       .set('Authorization', h())
       .send({ veiculo_id: veiculo, motorista_id: motorista });
-    await api().post(`/api/viagens/${v.body.id}/iniciar`).set('Authorization', h()).send({ iniciada_em });
+    await api()
+      .post(`/api/viagens/${v.body.id}/iniciar`)
+      .set('Authorization', h())
+      .send({ iniciada_em });
     return v.body.id;
   }
 

@@ -31,19 +31,21 @@ export const createMultaSchema = z
     path: ['placa'],
   });
 
-export const updateMultaSchema = z.object({
-  veiculo_id: z.string().uuid().nullable(),
-  motorista_id: z.string().uuid().nullable(),
-  viagem_id: z.string().uuid().nullable(),
-  ocorrida_em: z.coerce.date().nullable(),
-  tipo: z.string().max(150).nullable(),
-  valor: z.number().nonnegative().nullable(),
-  pontos_cnh: z.number().int().nonnegative().nullable(),
-  local: z.string().max(255).nullable(),
-  coordenada: coordenadaSchema.nullable(),
-  status_pagamento: statusPagamento,
-  status_revisao: statusRevisao,
-}).partial();
+export const updateMultaSchema = z
+  .object({
+    veiculo_id: z.string().uuid().nullable(),
+    motorista_id: z.string().uuid().nullable(),
+    viagem_id: z.string().uuid().nullable(),
+    ocorrida_em: z.coerce.date().nullable(),
+    tipo: z.string().max(150).nullable(),
+    valor: z.number().nonnegative().nullable(),
+    pontos_cnh: z.number().int().nonnegative().nullable(),
+    local: z.string().max(255).nullable(),
+    coordenada: coordenadaSchema.nullable(),
+    status_pagamento: statusPagamento,
+    status_revisao: statusRevisao,
+  })
+  .partial();
 
 export const listMultasQuerySchema = z.object({
   status_pagamento: statusPagamento.optional(),
