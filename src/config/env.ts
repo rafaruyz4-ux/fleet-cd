@@ -69,6 +69,20 @@ export const env = {
 
   bcryptRounds: numberEnv('BCRYPT_ROUNDS', '12'),
 
+  // URL pública do dashboard (front), usada para montar o link de redefinição
+  // de senha enviado por e-mail.
+  appBaseUrl: optional('APP_BASE_URL', 'http://localhost:5173'),
+
+  // SMTP para envio de e-mail (ex.: "esqueci minha senha"). Sem SMTP_HOST, o
+  // sistema apenas registra o e-mail (modo dev/teste) em vez de enviar.
+  smtp: {
+    host: process.env.SMTP_HOST,
+    port: numberEnv('SMTP_PORT', '587'),
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    remetente: optional('SMTP_REMETENTE', 'Fleet CD <nao-responda@fleetcd.local>'),
+  },
+
   // Worker de detecção de "sem GPS" (veículo que parou de transmitir).
   workerSemGps: {
     enabled: optional('WORKER_SEM_GPS_ENABLED', 'true') !== 'false',
