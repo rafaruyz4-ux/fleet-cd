@@ -3,6 +3,7 @@ import { env } from './config/env';
 import { pool } from './db/pool';
 import { fecharRedis } from './infra/redis';
 import { agendarWorkerSemGps } from './workers/sem-gps';
+import { agendarWorkerLimpezaGps } from './workers/limpeza-gps';
 
 const app = createApp();
 
@@ -12,6 +13,9 @@ const server = app.listen(env.port, () => {
 
 // Worker de detecção de "sem GPS" (pode ser desligado por env).
 const pararWorkerSemGps = env.workerSemGps.enabled ? agendarWorkerSemGps() : () => {};
+
+// Worker de limpeza do histórico de GPS antigo (LGPD; desligável por env).
+const pararWorkerLimpezaGps = env.lgpd.limpezaEnabled ? agendarWorkerLimpezaGps() : () => {};
 
 // Encerramento gracioso: para o worker, fecha o servidor HTTP, o Redis e o pool.
 let encerrando = false;
@@ -29,6 +33,7 @@ async function shutdown(signal: string): Promise<void> {
   prazo.unref();
 
   pararWorkerSemGps();
+  pararWorkerLimpezaGps();
   server.close(async () => {
     try {
       await fecharRedis();

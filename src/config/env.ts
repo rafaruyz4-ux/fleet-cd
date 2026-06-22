@@ -76,6 +76,14 @@ export const env = {
     limiteMin: numberEnv('WORKER_SEM_GPS_LIMITE_MIN', '10'),
   },
 
+  // LGPD: por quanto tempo guardar o histórico de posições GPS antes de apagar
+  // automaticamente (minimização de dados de localização).
+  lgpd: {
+    gpsRetencaoDias: numberEnv('LGPD_GPS_RETENCAO_DIAS', '90'),
+    limpezaEnabled: optional('LGPD_LIMPEZA_ENABLED', 'true') !== 'false',
+    limpezaIntervaloMs: numberEnv('LGPD_LIMPEZA_INTERVALO_H', '24') * 3_600_000,
+  },
+
   seedAdmin: {
     nome: optional('SEED_ADMIN_NOME', 'Administrador'),
     email: optional('SEED_ADMIN_EMAIL', 'admin@cd.local'),
