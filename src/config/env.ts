@@ -90,6 +90,15 @@ export const env = {
     limiteMin: numberEnv('WORKER_SEM_GPS_LIMITE_MIN', '10'),
   },
 
+  // Cobrança via Asaas. Sem ASAAS_API_KEY o sistema roda em "modo simulado":
+  // a assinatura é registrada localmente sem chamar o Asaas (dev/teste/sandbox
+  // sem cobrar). Em produção, use a chave do sandbox ou de produção.
+  asaas: {
+    apiKey: process.env.ASAAS_API_KEY,
+    baseUrl: optional('ASAAS_BASE_URL', 'https://sandbox.asaas.com/api/v3'),
+    webhookToken: process.env.ASAAS_WEBHOOK_TOKEN,
+  },
+
   // LGPD: por quanto tempo guardar o histórico de posições GPS antes de apagar
   // automaticamente (minimização de dados de localização).
   lgpd: {

@@ -1,6 +1,7 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
 import { MontadorUpdate } from '../../db/sql';
+import { assertPodeAdicionarVeiculo } from '../assinatura/assinatura.service';
 import type { CreateVeiculoInput, UpdateVeiculoInput } from './veiculos.schemas';
 
 const COLS = `id, placa, modelo, tipo, capacidade_kg, renavam, ativo, criado_em, updated_at`;
@@ -35,6 +36,7 @@ export async function getById(empresaId: string, id: string): Promise<Veiculo> {
 }
 
 export async function create(empresaId: string, input: CreateVeiculoInput): Promise<Veiculo> {
+  await assertPodeAdicionarVeiculo(empresaId); // trava do plano (faixa de frota)
   const row = await queryOne<Veiculo>(
     `INSERT INTO veiculos (empresa_id, placa, modelo, tipo, capacidade_kg, renavam, ativo)
      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, TRUE))

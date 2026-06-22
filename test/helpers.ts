@@ -27,7 +27,9 @@ export async function criarEmpresaComGestor(senha = 'outra-senha-123'): Promise<
   const email = `gestor-${Date.now()}-${next()}@empresa.test`;
   const hash = await bcrypt.hash(senha, 4);
   const emp = await pool.query<{ id: string }>(
-    `INSERT INTO empresas (nome, plano) VALUES ($1, 'ativo') RETURNING id`,
+    // plano_faixa 'enterprise' (sem limite) para não esbarrar na trava de plano
+    // ao criar vários veículos nos testes de isolamento.
+    `INSERT INTO empresas (nome, plano, plano_faixa) VALUES ($1, 'ativo', 'enterprise') RETURNING id`,
     [`Empresa ${email}`],
   );
   await pool.query(
