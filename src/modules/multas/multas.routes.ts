@@ -4,12 +4,15 @@ import { requireAuth, requireUsuario, tenantId } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import {
   createMultaSchema,
+  type ExportMultasQuery,
+  exportMultasQuerySchema,
   idParamSchema,
   type ListMultasQuery,
   listMultasQuerySchema,
   updateMultaSchema,
 } from './multas.schemas';
 import * as service from './multas.service';
+import { enviarCsv } from '../../utils/csv';
 
 export const multasRouter = Router();
 
@@ -20,6 +23,16 @@ multasRouter.get(
   validate({ query: listMultasQuerySchema }),
   asyncHandler(async (req, res) => {
     res.json(await service.list(tenantId(req), req.query as unknown as ListMultasQuery));
+  }),
+);
+
+// Exportação CSV (registrada ANTES de /:id para não cair na validação de UUID).
+multasRouter.get(
+  '/export.csv',
+  validate({ query: exportMultasQuerySchema }),
+  asyncHandler(async (req, res) => {
+    const csv = await service.exportCsv(tenantId(req), req.query as unknown as ExportMultasQuery);
+    enviarCsv(res, 'multas.csv', csv);
   }),
 );
 

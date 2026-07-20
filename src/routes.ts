@@ -12,6 +12,8 @@ import { multasRouter } from './modules/multas/multas.routes';
 import { empresasAdminRouter } from './modules/empresas/empresas.routes';
 import { assinaturaRouter, asaasWebhookRouter } from './modules/assinatura/assinatura.routes';
 import { consultasRouter } from './modules/consultas/consultas.routes';
+import { usuariosRouter } from './modules/usuarios/usuarios.routes';
+import { configuracoesRouter } from './modules/configuracoes/configuracoes.routes';
 
 export const apiRouter = Router();
 
@@ -27,6 +29,8 @@ apiRouter.use('/app', deviceRouter); // adaptadores (token na query) antes do ap
 apiRouter.use('/app', appRouter);
 apiRouter.use('/multas', multasRouter);
 apiRouter.use('/consultas', consultasRouter); // débitos/multas via Infosimples + contador
+apiRouter.use('/usuarios', usuariosRouter); // equipe do próprio tenant (admin)
+apiRouter.use('/configuracoes', configuracoesRouter); // dados da empresa + limiares de alerta
 apiRouter.use('/assinatura', assinaturaRouter);
 apiRouter.use('/webhooks', asaasWebhookRouter); // Asaas chama /api/webhooks/asaas (sem login)
 apiRouter.use('/admin/empresas', empresasAdminRouter); // backoffice (super admin)

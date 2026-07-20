@@ -6,11 +6,13 @@ import type {
   AddParadaInput,
   CreateViagemInput,
   EncerrarViagemInput,
+  ExportViagensQuery,
   IniciarViagemInput,
   ListViagensQuery,
   UpdateParadaInput,
   UpdateViagemInput,
 } from './viagens.schemas';
+import { csvDataHora, csvNumero, montarCsv } from '../../utils/csv';
 import { ViagemStatus, ParadaStatus, NfStatus } from '../../domain/status';
 
 // Runner: abstrai "rodar uma query" tanto no pool quanto dentro de uma
@@ -161,6 +163,88 @@ export async function list(empresaId: string, q: ListViagensQuery): Promise<List
     limit: q.limit,
     offset: q.offset,
   };
+}
+
+// ---------------------------------------------------------------------
+// Exportação CSV
+// ---------------------------------------------------------------------
+
+// Teto de linhas exportadas de uma vez (protege memória/tempo de resposta).
+const MAX_LINHAS_EXPORT = 10_000;
+
+interface ViagemExportRow extends ViagemRow {
+  paradas_count: number;
+  km_gps: number | null; // extensão do trajeto GPS, em km (null sem pontos)
+}
+
+/**
+ * Exporta as viagens (com os mesmos filtros da listagem) como CSV pt-BR.
+ * O "km real GPS" é o comprimento da linha formada pelas posições recebidas
+ * (ST_MakeLine ordenada por registrado_em), quando a viagem tem 2+ pontos.
+ */
+export async function exportCsv(empresaId: string, q: ExportViagensQuery): Promise<string> {
+  const w = new MontadorWhere();
+  w.add(`v.empresa_id = ${w.ph(empresaId)}`);
+  if (q.status) w.add(`v.status = ${w.ph(q.status)}`);
+  if (q.veiculo_id) w.add(`v.veiculo_id = ${w.ph(q.veiculo_id)}`);
+  if (q.motorista_id) w.add(`v.motorista_id = ${w.ph(q.motorista_id)}`);
+  if (q.de) w.add(`v.criado_em >= ${w.ph(q.de)}`);
+  if (q.ate) w.add(`v.criado_em <= ${w.ph(q.ate)}`);
+
+  const rows = await query<ViagemExportRow>(
+    `SELECT ${VIAGEM_COLS},
+            (SELECT COUNT(*)::int FROM paradas WHERE viagem_id = v.id) AS paradas_count,
+            gps.km_gps
+     ${VIAGEM_FROM}
+     LEFT JOIN LATERAL (
+       SELECT ST_Length(ST_MakeLine(p.coordenada::geometry ORDER BY p.registrado_em)::geography) / 1000
+         AS km_gps
+       FROM posicoes_gps p
+       WHERE p.viagem_id = v.id
+       HAVING COUNT(*) >= 2
+     ) gps ON TRUE
+     ${w.whereSql}
+     ORDER BY v.criado_em DESC
+     LIMIT ${w.ph(MAX_LINHAS_EXPORT)}`,
+    w.valores,
+  );
+
+  const STATUS_LABEL: Record<string, string> = {
+    em_andamento: 'Em andamento',
+    encerrada: 'Encerrada',
+    cancelada: 'Cancelada',
+  };
+
+  return montarCsv(
+    [
+      'Placa',
+      'Motorista',
+      'Início',
+      'Fim',
+      'KM inicial',
+      'KM final',
+      'KM rodado (odômetro)',
+      'KM real (GPS)',
+      'Status',
+      'Paradas',
+    ],
+    rows.map((v) => {
+      const kmRodado =
+        v.km_final != null && v.km_inicial != null ? v.km_final - v.km_inicial : null;
+      return [
+        v.veiculo_placa,
+        v.motorista_nome,
+        csvDataHora(v.iniciada_em),
+        csvDataHora(v.encerrada_em),
+        v.km_inicial != null ? String(v.km_inicial) : '',
+        v.km_final != null ? String(v.km_final) : '',
+        kmRodado != null ? String(kmRodado) : '',
+        csvNumero(v.km_gps === null ? null : Number(v.km_gps), 1),
+        STATUS_LABEL[v.status] ?? v.status,
+        String(v.paradas_count),
+      ];
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------

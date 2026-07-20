@@ -17,11 +17,42 @@ export type PlanoFaixa = 'starter' | 'pro' | 'enterprise'
 /** Assinatura da própria empresa (GET /assinatura). */
 export interface AssinaturaPublica {
   faixa: PlanoFaixa
+  /** Faixa aguardando confirmação de pagamento (null = sem troca em curso). */
+  faixaPendente: PlanoFaixa | null
   plano: string // nome do plano (ex.: "Pro")
-  status: string // trial | ativo | suspenso | cancelado
+  status: string // trial | ativo | pendente | suspenso | cancelado
   limiteVeiculos: number | null // null = ilimitado
   veiculosUsados: number
   precoMensalCentavos: number
+}
+
+/** Fatura (cobrança) da assinatura no Asaas (GET /assinatura/faturas). */
+export interface Fatura {
+  id: string
+  vencimento: string // YYYY-MM-DD
+  valorCentavos: number
+  status: 'pago' | 'pendente' | 'atrasado'
+  linkFatura: string | null
+  linkBoleto: string | null
+}
+
+/** Usuário do PRÓPRIO tenant (tela Usuários, admin da empresa). */
+export interface UsuarioTenant {
+  id: string
+  nome: string
+  email: string
+  papel: 'admin' | 'gestor'
+  ativo: boolean
+  criado_em: string
+}
+
+/** Configurações da própria empresa (GET/PATCH /configuracoes). */
+export interface ConfiguracoesEmpresa {
+  nome: string
+  cnpj: string | null
+  alertaVelocidadeKmh: number
+  alertaParadaMin: number
+  alertaSemGpsMin: number
 }
 
 /** Empresa-cliente, como listada no backoffice (super admin). */

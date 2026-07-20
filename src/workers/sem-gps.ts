@@ -13,7 +13,9 @@ export interface SemGpsAlerta {
 
 /**
  * Varre as viagens em andamento e gera o alerta `sem_gps` para as que estão
- * sem contato (sem posição recebida nem início) há mais que o limite. Faz dedup:
+ * sem contato (sem posição recebida nem início) há mais que o limite. O limite
+ * é o configurado POR EMPRESA (empresas.alerta_sem_gps_min, tela Configurações);
+ * `limiteMin` (env) fica como plano B se a coluna vier nula. Faz dedup:
  * não re-alerta enquanto não chegar uma nova posição (o alerta anterior já
  * cobre o silêncio atual). Devolve os alertas criados nesta passada.
  */
@@ -27,6 +29,7 @@ export async function detectarSemGps(
              GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em)) AS ref,
              p.lat, p.lng
       FROM viagens v
+      JOIN empresas e ON e.id = v.empresa_id
       LEFT JOIN LATERAL (
         SELECT recebido_em AS ultimo,
                ST_Y(coordenada::geometry) AS lat,
@@ -38,7 +41,8 @@ export async function detectarSemGps(
       ) p ON TRUE
       WHERE v.status = 'em_andamento'
         AND v.iniciada_em IS NOT NULL
-        AND now() - GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em)) > make_interval(mins => $1)
+        AND now() - GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em))
+              > make_interval(mins => COALESCE(e.alerta_sem_gps_min, $1))
         AND NOT EXISTS (
           SELECT 1 FROM alertas a
           WHERE a.viagem_id = v.id

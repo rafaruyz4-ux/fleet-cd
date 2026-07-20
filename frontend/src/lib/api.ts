@@ -1,6 +1,34 @@
 import { tokenStore } from './token-store'
+import { assinaturaSuspensaStore } from './assinatura-suspensa'
 
 const BASE = '/api'
+
+// Rotas que continuam acessíveis com a assinatura suspensa (mesma lista do
+// backend): sucesso nelas NÃO significa que o acesso foi restabelecido.
+const LIBERADAS_COM_SUSPENSA = ['/auth', '/assinatura']
+
+function rotaLiberadaComSuspensa(path: string): boolean {
+  return LIBERADAS_COM_SUSPENSA.some((base) => path === base || path.startsWith(`${base}/`))
+}
+
+/** Atualiza o sinal global de assinatura suspensa a partir de uma resposta. */
+function observarAssinatura(path: string, status: number, body: unknown) {
+  if (status === 403) {
+    const obj = body && typeof body === 'object' ? (body as Record<string, unknown>) : undefined
+    const details =
+      obj?.details && typeof obj.details === 'object'
+        ? (obj.details as Record<string, unknown>)
+        : undefined
+    if (details?.codigo === 'assinatura_suspensa') {
+      assinaturaSuspensaStore.set(true)
+      return
+    }
+  }
+  // Uma chamada de DOMÍNIO respondendo 2xx = o bloqueio caiu (pagamento ok).
+  if (status >= 200 && status < 300 && !rotaLiberadaComSuspensa(path)) {
+    assinaturaSuspensaStore.set(false)
+  }
+}
 
 export class ApiError extends Error {
   status: number
@@ -86,10 +114,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     }
   }
 
-  if (res.status === 204) return undefined as T
+  if (res.status === 204) {
+    observarAssinatura(path, res.status, undefined)
+    return undefined as T
+  }
 
   const text = await res.text()
   const data = text ? JSON.parse(text) : undefined
+
+  observarAssinatura(path, res.status, data)
 
   if (!res.ok) {
     // O backend padroniza erros como { error, details }; aceitamos message como fallback.
@@ -111,6 +144,54 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+}
+
+/**
+ * Baixa um arquivo de uma rota autenticada (as rotas de export exigem o token
+ * no header, então não dá para usar um <a href> direto): busca via fetch com
+ * Authorization (com retry de refresh em 401, como o request) e dispara o
+ * download pelo blob.
+ */
+export async function baixarArquivo(path: string, nomeArquivo: string): Promise<void> {
+  const send = (token: string | null) =>
+    fetch(`${BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+
+  let res = await send(tokenStore.getAccess())
+  if (res.status === 401) {
+    const ok = await refreshOnce()
+    if (!ok) {
+      tokenStore.clear()
+      onAuthFailure?.()
+      throw new ApiError(401, 'Sessão expirada')
+    }
+    res = await send(tokenStore.getAccess())
+  }
+
+  if (!res.ok) {
+    let data: unknown
+    try {
+      data = await res.json()
+    } catch {
+      data = undefined
+    }
+    observarAssinatura(path, res.status, data)
+    const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : undefined
+    const message =
+      (obj && typeof obj.error === 'string' && obj.error) || `Erro ${res.status} ao exportar`
+    throw new ApiError(res.status, message, data)
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nomeArquivo
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 /** Constrói uma query string a partir de um objeto, omitindo vazios. */

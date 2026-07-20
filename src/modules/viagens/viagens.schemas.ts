@@ -43,6 +43,13 @@ export const listViagensQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().default(0),
 });
 
+// Exportação CSV: mesmos filtros da listagem, sem paginação (exporta tudo
+// que casa com o filtro, até o teto aplicado no service).
+export const exportViagensQuerySchema = listViagensQuerySchema.omit({
+  limit: true,
+  offset: true,
+});
+
 const paradaStatus = z.enum(PARADA_STATUS);
 
 export const addParadaSchema = z.object({
@@ -70,5 +77,6 @@ export type UpdateViagemInput = z.infer<typeof updateViagemSchema>;
 export type IniciarViagemInput = z.infer<typeof iniciarViagemSchema>;
 export type EncerrarViagemInput = z.infer<typeof encerrarViagemSchema>;
 export type ListViagensQuery = z.infer<typeof listViagensQuerySchema>;
+export type ExportViagensQuery = z.infer<typeof exportViagensQuerySchema>;
 export type AddParadaInput = z.infer<typeof addParadaSchema>;
 export type UpdateParadaInput = z.infer<typeof updateParadaSchema>;

@@ -30,6 +30,95 @@ async function chamar(method: 'POST' | 'PUT', path: string, body: unknown): Prom
   return (await res.json()) as RespAsaas;
 }
 
+// ---------------------------------------------------------------------
+// Faturas (cobranças) de uma assinatura
+// ---------------------------------------------------------------------
+
+export type FaturaStatus = 'pago' | 'pendente' | 'atrasado';
+
+export interface Fatura {
+  id: string;
+  vencimento: string; // ISO (YYYY-MM-DD)
+  valorCentavos: number;
+  status: FaturaStatus;
+  // Página da fatura no Asaas (Pix/boleto/cartão) e o PDF do boleto.
+  linkFatura: string | null;
+  linkBoleto: string | null;
+}
+
+// Mapeia os status de payment do Asaas para os três que o painel mostra.
+const STATUS_ASAAS: Record<string, FaturaStatus> = {
+  RECEIVED: 'pago',
+  CONFIRMED: 'pago',
+  RECEIVED_IN_CASH: 'pago',
+  OVERDUE: 'atrasado',
+};
+
+interface PaymentAsaas {
+  id?: string;
+  dueDate?: string;
+  value?: number;
+  status?: string;
+  invoiceUrl?: string;
+  bankSlipUrl?: string;
+}
+
+/**
+ * Lista as cobranças de uma assinatura (GET /payments?subscription=...),
+ * mais recentes primeiro. Em modo simulado, devolve um histórico coerente
+ * com o preço informado: meses anteriores pagos + a fatura do mês em aberto.
+ */
+export async function listarFaturasAssinatura(
+  subscriptionId: string,
+  precoMensalCentavos: number,
+): Promise<Fatura[]> {
+  if (!asaasAtivo()) {
+    return faturasSimuladas(subscriptionId, precoMensalCentavos);
+  }
+
+  const res = await fetch(
+    `${env.asaas.baseUrl}/payments?subscription=${encodeURIComponent(subscriptionId)}&limit=50`,
+    { headers: { access_token: env.asaas.apiKey as string } },
+  );
+  if (!res.ok) {
+    const detalhe = await res.text().catch(() => '');
+    throw new Error(`Asaas respondeu ${res.status}: ${detalhe.slice(0, 300)}`);
+  }
+  const body = (await res.json()) as { data?: PaymentAsaas[] };
+  const pagamentos = Array.isArray(body.data) ? body.data : [];
+
+  return pagamentos
+    .map(
+      (p): Fatura => ({
+        id: p.id ?? '',
+        vencimento: p.dueDate ?? '',
+        valorCentavos: Math.round((p.value ?? 0) * 100),
+        status: STATUS_ASAAS[p.status ?? ''] ?? 'pendente',
+        linkFatura: p.invoiceUrl ?? null,
+        linkBoleto: p.bankSlipUrl ?? null,
+      }),
+    )
+    .sort((a, b) => (a.vencimento < b.vencimento ? 1 : -1));
+}
+
+// Modo simulado: 2 meses pagos + a fatura do mês atual em aberto. Datas
+// relativas a hoje para a tela sempre parecer "viva" em dev/demo.
+function faturasSimuladas(subscriptionId: string, precoMensalCentavos: number): Fatura[] {
+  const hoje = new Date();
+  const dia = (d: Date) => d.toISOString().slice(0, 10);
+  const mesAtras = (n: number) =>
+    new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - n, 10));
+
+  return [0, 1, 2].map((n) => ({
+    id: `sim_pay_${subscriptionId}_${n}`,
+    vencimento: dia(mesAtras(n)),
+    valorCentavos: precoMensalCentavos,
+    status: n === 0 ? 'pendente' : 'pago',
+    linkFatura: null, // sem link em modo simulado (não há cobrança real)
+    linkBoleto: null,
+  }));
+}
+
 export interface DadosAssinatura {
   nome: string;
   cnpj: string | null;

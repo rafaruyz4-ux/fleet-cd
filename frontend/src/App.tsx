@@ -13,6 +13,8 @@ import { AlertasPage } from '@/pages/AlertasPage'
 import { MultasPage } from '@/pages/MultasPage'
 import { NfsPage } from '@/pages/NfsPage'
 import { CadastrosPage } from '@/pages/CadastrosPage'
+import { UsuariosPage } from '@/pages/UsuariosPage'
+import { ConfiguracoesPage } from '@/pages/ConfiguracoesPage'
 import { BackofficePage } from '@/pages/BackofficePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -26,6 +28,13 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
   const { usuario } = useAuth()
   if (!usuario?.superAdmin) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+// Restringe a área de gestão da conta ao admin da empresa.
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuth()
+  if (usuario?.papel !== 'admin') return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -57,6 +66,8 @@ export function App() {
         <Route path="nfs" element={<NfsPage />} />
         <Route path="cadastros" element={<CadastrosPage />} />
         <Route path="assinatura" element={<AssinaturaPage />} />
+        <Route path="usuarios" element={<RequireAdmin><UsuariosPage /></RequireAdmin>} />
+        <Route path="configuracoes" element={<RequireAdmin><ConfiguracoesPage /></RequireAdmin>} />
         <Route path="bastidores" element={<RequireSuperAdmin><BackofficePage /></RequireSuperAdmin>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

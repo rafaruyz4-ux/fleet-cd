@@ -6,6 +6,8 @@ import {
   addParadaSchema,
   createViagemSchema,
   encerrarViagemSchema,
+  type ExportViagensQuery,
+  exportViagensQuerySchema,
   idParamSchema,
   iniciarViagemSchema,
   type ListViagensQuery,
@@ -14,6 +16,7 @@ import {
   updateParadaSchema,
   updateViagemSchema,
 } from './viagens.schemas';
+import { enviarCsv } from '../../utils/csv';
 import * as service from './viagens.service';
 import * as gpsService from '../gps/gps.service';
 import * as alertasService from '../alertas/alertas.service';
@@ -27,6 +30,16 @@ viagensRouter.get(
   validate({ query: listViagensQuerySchema }),
   asyncHandler(async (req, res) => {
     res.json(await service.list(tenantId(req), req.query as unknown as ListViagensQuery));
+  }),
+);
+
+// Exportação CSV (registrada ANTES de /:id para não cair na validação de UUID).
+viagensRouter.get(
+  '/export.csv',
+  validate({ query: exportViagensQuerySchema }),
+  asyncHandler(async (req, res) => {
+    const csv = await service.exportCsv(tenantId(req), req.query as unknown as ExportViagensQuery);
+    enviarCsv(res, 'viagens.csv', csv);
   }),
 );
 

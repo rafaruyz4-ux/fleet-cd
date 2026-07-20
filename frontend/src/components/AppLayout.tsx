@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import {
   AlertTriangle,
   Building2,
   CreditCard,
   FileText,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
   Receipt,
   Route as RouteIcon,
+  Settings,
   Truck,
+  UserCog,
   Users,
   X,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
+import { useAssinaturaSuspensa } from '@/lib/assinatura-suspensa'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { TrocarSenhaModal } from '@/components/TrocarSenhaModal'
 
 const NAV = [
   { to: '/', label: 'Visão geral', icon: LayoutDashboard, end: true },
@@ -26,6 +31,12 @@ const NAV = [
   { to: '/nfs', label: 'Notas fiscais', icon: FileText },
   { to: '/cadastros', label: 'Cadastros', icon: Users },
   { to: '/assinatura', label: 'Assinatura', icon: CreditCard },
+]
+
+// Itens exclusivos do ADMIN da empresa (gestão da conta).
+const NAV_ADMIN = [
+  { to: '/usuarios', label: 'Usuários', icon: UserCog, end: false },
+  { to: '/configuracoes', label: 'Configurações', icon: Settings, end: false },
 ]
 
 // Itens exclusivos da equipe da plataforma (super admin).
@@ -58,7 +69,12 @@ function SidebarConteudo({
   onFechar?: () => void
 }) {
   const { usuario, logout } = useAuth()
-  const nav = usuario?.superAdmin ? [...NAV, ...NAV_SUPER] : NAV
+  const [trocarSenhaOpen, setTrocarSenhaOpen] = useState(false)
+  const nav = [
+    ...NAV,
+    ...(usuario?.papel === 'admin' ? NAV_ADMIN : []),
+    ...(usuario?.superAdmin ? NAV_SUPER : []),
+  ]
 
   return (
     <>
@@ -101,12 +117,47 @@ function SidebarConteudo({
             <p className="truncate text-xs text-muted-foreground">{usuario?.email}</p>
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => setTrocarSenhaOpen(true)}
+        >
+          <KeyRound className="h-4 w-4" />
+          Trocar senha
+        </Button>
         <Button variant="ghost" size="sm" className="w-full justify-start" onClick={logout}>
           <LogOut className="h-4 w-4" />
           Sair
         </Button>
       </div>
+      {trocarSenhaOpen && (
+        <TrocarSenhaModal open={trocarSenhaOpen} onClose={() => setTrocarSenhaOpen(false)} />
+      )}
     </>
+  )
+}
+
+/**
+ * Banner global de assinatura suspensa: aparece quando qualquer chamada à API
+ * responde 403 com codigo 'assinatura_suspensa' e some quando o acesso volta.
+ */
+function BannerAssinaturaSuspensa() {
+  const suspensa = useAssinaturaSuspensa()
+  if (!suspensa) return null
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-destructive/40 bg-destructive/15 px-4 py-2.5 text-sm text-destructive sm:px-6">
+      <span className="flex items-center gap-2 font-medium">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        Assinatura suspensa — regularize o pagamento para voltar a usar o sistema.
+      </span>
+      <Link
+        to="/assinatura"
+        className="rounded-md border border-destructive/40 px-3 py-1 font-medium transition-colors hover:bg-destructive/20"
+      >
+        Ir para Assinatura
+      </Link>
+    </div>
   )
 }
 
@@ -161,6 +212,7 @@ export function AppLayout() {
           </Button>
           <Logo />
         </header>
+        <BannerAssinaturaSuspensa />
         <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>

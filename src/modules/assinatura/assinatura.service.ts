@@ -1,7 +1,11 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
 import { PLANOS, type PlanoFaixa } from '../../domain/planos';
-import { garantirClienteEAssinatura } from '../../infra/asaas';
+import {
+  garantirClienteEAssinatura,
+  listarFaturasAssinatura,
+  type Fatura,
+} from '../../infra/asaas';
 import { invalidarCacheEmpresa } from '../../middleware/acesso';
 
 interface EmpresaAssinaturaRow {
@@ -57,6 +61,19 @@ export async function obterAssinatura(empresaId: string): Promise<AssinaturaPubl
     veiculosUsados: await contarVeiculosAtivos(empresaId),
     precoMensalCentavos: p.precoMensalCentavos,
   };
+}
+
+/**
+ * Faturas (cobranças) da assinatura da empresa. Sem assinatura no Asaas
+ * ainda (trial que nunca trocou de plano), devolve lista vazia. O valor
+ * usado no modo simulado é o do plano pendente (se houver troca em curso)
+ * ou o do plano atual.
+ */
+export async function listarFaturas(empresaId: string): Promise<Fatura[]> {
+  const e = await buscarEmpresa(empresaId);
+  if (!e.asaas_subscription_id) return [];
+  const faixa = e.plano_faixa_pendente ?? e.plano_faixa;
+  return listarFaturasAssinatura(e.asaas_subscription_id, PLANOS[faixa].precoMensalCentavos);
 }
 
 /**

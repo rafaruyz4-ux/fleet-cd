@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ExternalLink, Link2, Plus, Search } from 'lucide-react'
+import { Download, ExternalLink, Link2, Plus, Search } from 'lucide-react'
 import { useMultaMutations, useMultas, type MultasFiltro } from '@/api/hooks'
+import { ApiError, baixarArquivo, qs } from '@/lib/api'
 import { PageHeader } from '@/components/AppLayout'
 import { DataState } from '@/components/DataState'
 import { Pagination } from '@/components/Pagination'
@@ -36,11 +37,32 @@ export function MultasPage() {
 
   const { data, isLoading, error, isPlaceholderData } = useMultas(filtro)
   const { revincular } = useMultaMutations()
+  const [exportando, setExportando] = useState(false)
   const multas = data?.data ?? []
 
   const reset = (fn: () => void) => {
     fn()
     setOffset(0)
+  }
+
+  // Exporta com os mesmos filtros aplicados na tela (download autenticado).
+  async function exportar() {
+    setExportando(true)
+    try {
+      await baixarArquivo(
+        `/multas/export.csv${qs({
+          status_revisao: statusRevisao || undefined,
+          status_pagamento: statusPagamento || undefined,
+          busca: buscaAplicada || undefined,
+        })}`,
+        'multas.csv',
+      )
+      toast.success('CSV de multas exportado.')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Não foi possível exportar o CSV.')
+    } finally {
+      setExportando(false)
+    }
   }
 
   return (
@@ -49,9 +71,14 @@ export function MultasPage() {
         title="Multas"
         description="Infrações vinculadas automaticamente às viagens."
         actions={
-          <Button onClick={() => setCriarOpen(true)}>
-            <Plus className="h-4 w-4" /> Lançar multa
-          </Button>
+          <>
+            <Button variant="outline" onClick={exportar} disabled={exportando}>
+              <Download className="h-4 w-4" /> {exportando ? 'Exportando…' : 'Exportar CSV'}
+            </Button>
+            <Button onClick={() => setCriarOpen(true)}>
+              <Plus className="h-4 w-4" /> Lançar multa
+            </Button>
+          </>
         }
       />
       {criarOpen && <CriarMultaModal open={criarOpen} onClose={() => setCriarOpen(false)} />}

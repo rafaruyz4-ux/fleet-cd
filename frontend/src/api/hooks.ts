@@ -3,9 +3,11 @@ import { api, qs } from '@/lib/api'
 import type {
   Alerta,
   AssinaturaPublica,
+  ConfiguracoesEmpresa,
   Empresa,
   EmpresaCriada,
   EmpresaDetalhe,
+  Fatura,
   Motorista,
   Multa,
   NotaFiscal,
@@ -16,6 +18,7 @@ import type {
   Trajetoria,
   TrajetoRuas,
   Unidade,
+  UsuarioTenant,
   Veiculo,
   Viagem,
 } from '@/types'
@@ -114,6 +117,84 @@ export function useMudarPlano() {
       qc.invalidateQueries({ queryKey: ['consultas-consumo'] })
       qc.invalidateQueries({ queryKey: ['veiculos'] })
     },
+  })
+}
+
+export function useFaturas() {
+  return useQuery({
+    queryKey: ['faturas'],
+    queryFn: () => api.get<Fatura[]>('/assinatura/faturas'),
+  })
+}
+
+// ---------------------------------------------------------------------
+// Usuários do próprio tenant (admin da empresa)
+// ---------------------------------------------------------------------
+export function useUsuariosEmpresa(enabled = true) {
+  return useQuery({
+    queryKey: ['usuarios-empresa'],
+    queryFn: () => api.get<UsuarioTenant[]>('/usuarios'),
+    enabled,
+  })
+}
+
+export interface CriarUsuarioInput {
+  nome: string
+  email: string
+  papel: 'admin' | 'gestor'
+  senha: string
+}
+
+export function useUsuarioMutations() {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['usuarios-empresa'] })
+  return {
+    criar: useMutation({
+      mutationFn: (input: CriarUsuarioInput) => api.post<UsuarioTenant>('/usuarios', input),
+      meta: { erroLocal: true }, // erro tratado inline no NovoUsuarioModal
+      onSuccess: invalidate,
+    }),
+    atualizar: useMutation({
+      mutationFn: ({ id, input }: { id: string; input: { papel?: 'admin' | 'gestor'; ativo?: boolean } }) =>
+        api.patch<UsuarioTenant>(`/usuarios/${id}`, input),
+      onSuccess: invalidate,
+    }),
+  }
+}
+
+export function useTrocarMinhaSenha() {
+  return useMutation({
+    mutationFn: (input: { senhaAtual: string; novaSenha: string }) =>
+      api.post<{ ok: boolean }>('/usuarios/me/senha', input),
+    meta: { erroLocal: true }, // erro tratado inline no TrocarSenhaModal
+  })
+}
+
+// ---------------------------------------------------------------------
+// Configurações da própria empresa
+// ---------------------------------------------------------------------
+export function useConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes'],
+    queryFn: () => api.get<ConfiguracoesEmpresa>('/configuracoes'),
+  })
+}
+
+export interface AtualizarConfiguracoesInput {
+  nome?: string
+  cnpj?: string
+  alertaVelocidadeKmh?: number
+  alertaParadaMin?: number
+  alertaSemGpsMin?: number
+}
+
+export function useAtualizarConfiguracoes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AtualizarConfiguracoesInput) =>
+      api.patch<ConfiguracoesEmpresa>('/configuracoes', input),
+    meta: { erroLocal: true }, // erro tratado inline na ConfiguracoesPage
+    onSuccess: (cfg) => qc.setQueryData(['configuracoes'], cfg),
   })
 }
 

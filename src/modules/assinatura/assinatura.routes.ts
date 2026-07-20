@@ -19,6 +19,14 @@ assinaturaRouter.get(
   }),
 );
 
+// Faturas da assinatura (histórico de cobranças no Asaas; simulado sem chave).
+assinaturaRouter.get(
+  '/faturas',
+  asyncHandler(async (req, res) => {
+    res.json(await service.listarFaturas(tenantId(req)));
+  }),
+);
+
 // Troca de plano (upgrade/downgrade).
 assinaturaRouter.post(
   '/plano',

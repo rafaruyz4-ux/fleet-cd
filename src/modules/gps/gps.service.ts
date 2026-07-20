@@ -8,13 +8,39 @@ import { detectarParadas, haversineM, type ParadaDetectada } from './paradas';
 import { ViagemStatus } from '../../domain/status';
 
 // ---------------------------------------------------------------------
-// Limiares de detecção (constantes; podem virar configuráveis depois).
+// Limiares de detecção. Velocidade, parada e sem_gps são configuráveis POR
+// EMPRESA (colunas alerta_* de empresas, migration 010; tela Configurações);
+// os defaults abaixo valem como plano B se a leitura falhar.
 // ---------------------------------------------------------------------
 const VEL_MAX_KMH = 110; // acima disso → velocidade_alta
-const SEM_GPS_GAP_MS = 10 * 60 * 1000; // intervalo entre pontos → sem_gps
+const SEM_GPS_GAP_MIN = 10; // intervalo entre pontos (min) → sem_gps
 const PARADA_RAIO_M = 50; // raio para considerar "parado"
-const PARADA_TEMPO_MS = 15 * 60 * 1000; // parado por mais que isso → parada_longa
+const PARADA_TEMPO_MIN = 15; // parado por mais que isso (min) → parada_longa
 const COOLDOWN_MS = 5 * 60 * 1000; // janela mínima entre alertas do mesmo tipo
+
+// Limiares de alerta da empresa (configuráveis na tela Configurações).
+interface LimiaresEmpresa {
+  velMaxKmh: number;
+  semGpsGapMs: number;
+  paradaTempoMs: number;
+}
+
+async function limiaresDaEmpresa(client: PoolClient, empresaId: string): Promise<LimiaresEmpresa> {
+  const cfg = await client.query<{
+    alerta_velocidade_kmh: number;
+    alerta_parada_min: number;
+    alerta_sem_gps_min: number;
+  }>(
+    'SELECT alerta_velocidade_kmh, alerta_parada_min, alerta_sem_gps_min FROM empresas WHERE id = $1',
+    [empresaId],
+  );
+  const row = cfg.rows[0];
+  return {
+    velMaxKmh: row?.alerta_velocidade_kmh ?? VEL_MAX_KMH,
+    semGpsGapMs: (row?.alerta_sem_gps_min ?? SEM_GPS_GAP_MIN) * 60_000,
+    paradaTempoMs: (row?.alerta_parada_min ?? PARADA_TEMPO_MIN) * 60_000,
+  };
+}
 
 // Filtro de qualidade na ingestão: ponto ruim NÃO persiste, mas a resposta
 // segue OK (o app não deve reenviar — o ponto é ruim mesmo).
@@ -107,6 +133,9 @@ export async function ingestPosicoes(
       throw AppError.badRequest('Só é possível enviar posições de viagens em andamento');
     }
 
+    // Limiares de alerta configurados pela empresa (tela Configurações).
+    const limiares = await limiaresDaEmpresa(client, empresaId);
+
     // Rota planejada (para detectar desvio).
     let raioTolerancia = 0;
     let temLinha = false;
@@ -190,15 +219,15 @@ export async function ingestPosicoes(
       const candidatos: Array<{ tipo: AlertaTipo; descricao: string }> = [];
 
       // velocidade_alta
-      if (p.velocidade_kmh != null && p.velocidade_kmh > VEL_MAX_KMH) {
+      if (p.velocidade_kmh != null && p.velocidade_kmh > limiares.velMaxKmh) {
         candidatos.push({
           tipo: 'velocidade_alta',
-          descricao: `Velocidade de ${p.velocidade_kmh} km/h (limite ${VEL_MAX_KMH})`,
+          descricao: `Velocidade de ${p.velocidade_kmh} km/h (limite ${limiares.velMaxKmh})`,
         });
       }
 
       // sem_gps (gap em relação ao ponto anterior)
-      if (prev && time - prev.time > SEM_GPS_GAP_MS) {
+      if (prev && time - prev.time > limiares.semGpsGapMs) {
         const minutos = Math.round((time - prev.time) / 60000);
         candidatos.push({
           tipo: 'sem_gps',
@@ -227,7 +256,7 @@ export async function ingestPosicoes(
         stopAnchor = ponto;
         stopEmitido = false;
       } else if (haversineM(ponto, stopAnchor) <= PARADA_RAIO_M) {
-        if (!stopEmitido && time - stopAnchor.time >= PARADA_TEMPO_MS) {
+        if (!stopEmitido && time - stopAnchor.time >= limiares.paradaTempoMs) {
           const minutos = Math.round((time - stopAnchor.time) / 60000);
           candidatos.push({
             tipo: 'parada_longa',

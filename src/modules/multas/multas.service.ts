@@ -2,7 +2,13 @@ import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { MontadorUpdate, MontadorWhere } from '../../db/sql';
-import type { CreateMultaInput, ListMultasQuery, UpdateMultaInput } from './multas.schemas';
+import type {
+  CreateMultaInput,
+  ExportMultasQuery,
+  ListMultasQuery,
+  UpdateMultaInput,
+} from './multas.schemas';
+import { csvDataHora, csvNumero, montarCsv } from '../../utils/csv';
 
 interface MultaRow {
   id: string;
@@ -123,6 +129,77 @@ export async function list(empresaId: string, q: ListMultasQuery): Promise<ListM
     limit: q.limit,
     offset: q.offset,
   };
+}
+
+// ---------------------------------------------------------------------
+// Exportação CSV
+// ---------------------------------------------------------------------
+const MAX_LINHAS_EXPORT = 10_000;
+
+/** Exporta as multas (mesmos filtros da listagem) como CSV pt-BR. */
+export async function exportCsv(empresaId: string, q: ExportMultasQuery): Promise<string> {
+  const w = new MontadorWhere();
+  w.add(`m.empresa_id = ${w.ph(empresaId)}`);
+  if (q.status_pagamento) w.add(`m.status_pagamento = ${w.ph(q.status_pagamento)}`);
+  if (q.status_revisao) w.add(`m.status_revisao = ${w.ph(q.status_revisao)}`);
+  if (q.fonte) w.add(`m.fonte = ${w.ph(q.fonte)}`);
+  if (q.veiculo_id) w.add(`m.veiculo_id = ${w.ph(q.veiculo_id)}`);
+  if (q.motorista_id) w.add(`m.motorista_id = ${w.ph(q.motorista_id)}`);
+  if (q.de) w.add(`m.ocorrida_em >= ${w.ph(q.de)}`);
+  if (q.ate) w.add(`m.ocorrida_em <= ${w.ph(q.ate)}`);
+  if (q.busca) {
+    const p = w.ph(`%${q.busca}%`);
+    w.add(`(m.numero_auto ILIKE ${p} OR m.tipo ILIKE ${p})`);
+  }
+
+  const rows = await query<MultaRow>(
+    `SELECT ${SELECT_COLS} ${FROM} ${w.whereSql}
+     ORDER BY m.ocorrida_em DESC NULLS LAST, m.criado_em DESC
+     LIMIT ${w.ph(MAX_LINHAS_EXPORT)}`,
+    w.valores,
+  );
+
+  const PAGAMENTO: Record<string, string> = {
+    pendente: 'Pendente',
+    pago: 'Pago',
+    recurso: 'Em recurso',
+  };
+  const REVISAO: Record<string, string> = {
+    auto_vinculada: 'Auto-vinculada',
+    aguardando_revisao: 'Aguardando revisão',
+    revisada: 'Revisada',
+  };
+
+  return montarCsv(
+    [
+      'Nº do auto',
+      'Placa',
+      'Motorista',
+      'Ocorrida em',
+      'Tipo',
+      'Valor (R$)',
+      'Pontos CNH',
+      'Local',
+      'Pagamento',
+      'Revisão',
+      'Fonte',
+    ],
+    rows
+      .map(toMulta)
+      .map((m) => [
+        m.numero_auto ?? '',
+        m.veiculo_placa ?? '',
+        m.motorista_nome ?? '',
+        csvDataHora(m.ocorrida_em),
+        m.tipo ?? '',
+        csvNumero(m.valor),
+        m.pontos_cnh != null ? String(m.pontos_cnh) : '',
+        m.local ?? '',
+        PAGAMENTO[m.status_pagamento] ?? m.status_pagamento,
+        REVISAO[m.status_revisao] ?? m.status_revisao,
+        m.fonte === 'infosimples' ? 'Consulta automática' : 'Manual',
+      ]),
+  );
 }
 
 // Acha a viagem que estava em curso para o veículo no instante da infração.

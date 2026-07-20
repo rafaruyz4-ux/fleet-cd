@@ -62,8 +62,15 @@ export const listMultasQuerySchema = z.object({
   offset: z.coerce.number().int().nonnegative().default(0),
 });
 
+// Exportação CSV: mesmos filtros da listagem, sem paginação.
+export const exportMultasQuerySchema = listMultasQuerySchema.omit({
+  limit: true,
+  offset: true,
+});
+
 export const idParamSchema = z.object({ id: z.string().uuid('ID inválido') });
 
 export type CreateMultaInput = z.infer<typeof createMultaSchema>;
 export type UpdateMultaInput = z.infer<typeof updateMultaSchema>;
 export type ListMultasQuery = z.infer<typeof listMultasQuerySchema>;
+export type ExportMultasQuery = z.infer<typeof exportMultasQuerySchema>;

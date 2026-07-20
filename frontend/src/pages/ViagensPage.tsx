@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Plus } from 'lucide-react'
+import { toast } from 'sonner'
+import { ChevronRight, Download, Plus } from 'lucide-react'
 import { useMotoristas, useVeiculos, useViagens, type ViagensFiltro } from '@/api/hooks'
+import { ApiError, baixarArquivo, qs } from '@/lib/api'
 import { PageHeader } from '@/components/AppLayout'
 import { DataState } from '@/components/DataState'
 import { Pagination } from '@/components/Pagination'
@@ -22,6 +24,7 @@ export function ViagensPage() {
   const [motoristaId, setMotoristaId] = useState('')
   const [offset, setOffset] = useState(0)
   const [criarOpen, setCriarOpen] = useState(false)
+  const [exportando, setExportando] = useState(false)
 
   const filtro: ViagensFiltro = {
     status: status || undefined,
@@ -43,15 +46,41 @@ export function ViagensPage() {
   const viagens = data?.data ?? []
   const semFiltros = !status && !veiculoId && !motoristaId
 
+  // Exporta com os MESMOS filtros aplicados na tela (rota autenticada por
+  // header → download via fetch + blob, não por <a href>).
+  async function exportar() {
+    setExportando(true)
+    try {
+      await baixarArquivo(
+        `/viagens/export.csv${qs({
+          status: status || undefined,
+          veiculo_id: veiculoId || undefined,
+          motorista_id: motoristaId || undefined,
+        })}`,
+        'viagens.csv',
+      )
+      toast.success('CSV de viagens exportado.')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Não foi possível exportar o CSV.')
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Viagens"
         description="Acompanhe e gerencie as viagens da frota."
         actions={
-          <Button onClick={() => setCriarOpen(true)}>
-            <Plus className="h-4 w-4" /> Nova viagem
-          </Button>
+          <>
+            <Button variant="outline" onClick={exportar} disabled={exportando}>
+              <Download className="h-4 w-4" /> {exportando ? 'Exportando…' : 'Exportar CSV'}
+            </Button>
+            <Button onClick={() => setCriarOpen(true)}>
+              <Plus className="h-4 w-4" /> Nova viagem
+            </Button>
+          </>
         }
       />
       {criarOpen && <CriarViagemModal open={criarOpen} onClose={() => setCriarOpen(false)} />}
