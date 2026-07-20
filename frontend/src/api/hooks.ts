@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, qs } from '@/lib/api'
 import type {
   Alerta,
+  AssinaturaPublica,
   Empresa,
   EmpresaCriada,
   EmpresaDetalhe,
@@ -10,6 +11,7 @@ import type {
   NotaFiscal,
   Paginated,
   Parada,
+  PlanoFaixa,
   Rota,
   Trajetoria,
   TrajetoRuas,
@@ -84,6 +86,30 @@ export function useRedefinirSenha() {
       senha: string
     }) =>
       api.post<{ ok: boolean }>(`/admin/empresas/${empresaId}/usuarios/${usuarioId}/senha`, { senha }),
+  })
+}
+
+// ---------------------------------------------------------------------
+// Assinatura (plano da própria empresa + cobrança Asaas)
+// ---------------------------------------------------------------------
+export function useAssinatura() {
+  return useQuery({
+    queryKey: ['assinatura'],
+    queryFn: () => api.get<AssinaturaPublica>('/assinatura'),
+  })
+}
+
+export function useMudarPlano() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (faixa: PlanoFaixa) =>
+      api.post<AssinaturaPublica>('/assinatura/plano', { faixa }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['assinatura'] })
+      // O limite de consultas e a trava de veículos dependem do plano.
+      qc.invalidateQueries({ queryKey: ['consultas-consumo'] })
+      qc.invalidateQueries({ queryKey: ['veiculos'] })
+    },
   })
 }
 
@@ -275,6 +301,48 @@ export function useMultaMutations() {
       onSuccess: invalidate,
     }),
   }
+}
+
+// ---------------------------------------------------------------------
+// Consultas de débitos/multas (Infosimples) + contador de consumo
+// ---------------------------------------------------------------------
+export interface ConsumoConsultas {
+  faixa: string
+  plano: string
+  usados: number
+  limite: number | null // null = ilimitado
+  restantes: number | null
+  custoCentavosMes: number
+  configurado: boolean // false = modo simulado (sem chave ainda)
+}
+
+export interface ResultadoConsulta {
+  simulado: boolean
+  mensagem: string
+  placa: string
+  multasEncontradas: number
+  multasNovas: number
+  multasDuplicadas: number
+  consumo: ConsumoConsultas
+}
+
+export function useConsumoConsultas() {
+  return useQuery({
+    queryKey: ['consultas-consumo'],
+    queryFn: () => api.get<ConsumoConsultas>('/consultas/consumo'),
+  })
+}
+
+export function useConsultarVeiculo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (veiculoId: string) =>
+      api.post<ResultadoConsulta>(`/consultas/veiculo/${veiculoId}`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consultas-consumo'] })
+      qc.invalidateQueries({ queryKey: ['multas'] })
+    },
+  })
 }
 
 // ---------------------------------------------------------------------

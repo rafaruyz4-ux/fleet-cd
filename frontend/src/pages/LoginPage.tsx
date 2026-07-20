@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Truck } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
@@ -34,13 +35,17 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Truck className="h-6 w-6" />
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="relative w-full max-w-sm overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]" />
+        <CardHeader className="space-y-3 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(258_100%_62%)] text-primary-foreground shadow-[0_0_28px_rgba(0,212,255,0.45)]">
+            <Truck className="h-7 w-7" />
           </div>
-          <CardTitle className="text-xl">Gestão de Frota</CardTitle>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
+            Nexus Orbital
+          </div>
+          <CardTitle className="font-display text-2xl">Gestão de Frota</CardTitle>
           <CardDescription>Painel do gestor — entre com suas credenciais</CardDescription>
         </CardHeader>
         <CardContent>
@@ -77,6 +82,12 @@ export function LoginPage() {
               {enviando && <Spinner />}
               Entrar
             </Button>
+            <Link
+              to="/esqueci-senha"
+              className="block text-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              Esqueci minha senha
+            </Link>
           </form>
         </CardContent>
       </Card>

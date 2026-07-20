@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -5,55 +6,60 @@
 
 /*
  * Design tokens (estilo shadcn/ui) expostos como CSS vars e mapeados para
- * utilitários Tailwind v4 via @theme inline. Tema claro por padrão.
+ * utilitários Tailwind v4 via @theme inline.
+ *
+ * Tema: NEXUS ORBITAL — escuro por padrão (azul-marinho profundo + ciano).
+ * A paleta vem da identidade oficial da Nexus Orbital:
+ *   ciano #00D4FF · roxo #7B2FFF · verde #00E87A · fundo #050A14 · texto #E8F4FF
  */
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(222 47% 11%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(222 47% 11%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(222 47% 11%);
-  --primary: hsl(222 47% 31%);
-  --primary-foreground: hsl(210 40% 98%);
-  --secondary: hsl(210 40% 96%);
-  --secondary-foreground: hsl(222 47% 11%);
-  --muted: hsl(210 40% 96%);
-  --muted-foreground: hsl(215 16% 47%);
-  --accent: hsl(210 40% 96%);
-  --accent-foreground: hsl(222 47% 11%);
-  --destructive: hsl(0 72% 51%);
+  --background: hsl(220 60% 5%);
+  --foreground: hsl(210 100% 96%);
+  --card: hsl(220 42% 9%);
+  --card-foreground: hsl(210 100% 96%);
+  --popover: hsl(220 45% 8%);
+  --popover-foreground: hsl(210 100% 96%);
+  --primary: hsl(190 100% 50%);
+  --primary-foreground: hsl(220 60% 6%);
+  --secondary: hsl(217 33% 14%);
+  --secondary-foreground: hsl(210 100% 96%);
+  --muted: hsl(217 33% 14%);
+  --muted-foreground: hsl(212 30% 64%);
+  --accent: hsl(200 80% 14%);
+  --accent-foreground: hsl(190 100% 82%);
+  --destructive: hsl(0 80% 62%);
   --destructive-foreground: hsl(210 40% 98%);
-  --success: hsl(142 71% 45%);
-  --warning: hsl(38 92% 50%);
-  --border: hsl(214 32% 91%);
-  --input: hsl(214 32% 91%);
-  --ring: hsl(222 47% 31%);
-  --radius: 0.5rem;
+  --success: hsl(152 100% 45%);
+  --warning: hsl(38 95% 55%);
+  --border: hsl(205 38% 16%);
+  --input: hsl(205 38% 18%);
+  --ring: hsl(190 100% 50%);
+  --radius: 0.75rem;
 }
 
+/* Mantém o mesmo tema mesmo se a classe .dark for aplicada. */
 .dark {
-  --background: hsl(222 47% 11%);
-  --foreground: hsl(210 40% 98%);
-  --card: hsl(222 47% 13%);
-  --card-foreground: hsl(210 40% 98%);
-  --popover: hsl(222 47% 13%);
-  --popover-foreground: hsl(210 40% 98%);
-  --primary: hsl(210 40% 98%);
-  --primary-foreground: hsl(222 47% 11%);
-  --secondary: hsl(217 33% 18%);
-  --secondary-foreground: hsl(210 40% 98%);
-  --muted: hsl(217 33% 18%);
-  --muted-foreground: hsl(215 20% 65%);
-  --accent: hsl(217 33% 18%);
-  --accent-foreground: hsl(210 40% 98%);
-  --destructive: hsl(0 63% 31%);
+  --background: hsl(220 60% 5%);
+  --foreground: hsl(210 100% 96%);
+  --card: hsl(220 42% 9%);
+  --card-foreground: hsl(210 100% 96%);
+  --popover: hsl(220 45% 8%);
+  --popover-foreground: hsl(210 100% 96%);
+  --primary: hsl(190 100% 50%);
+  --primary-foreground: hsl(220 60% 6%);
+  --secondary: hsl(217 33% 14%);
+  --secondary-foreground: hsl(210 100% 96%);
+  --muted: hsl(217 33% 14%);
+  --muted-foreground: hsl(212 30% 64%);
+  --accent: hsl(200 80% 14%);
+  --accent-foreground: hsl(190 100% 82%);
+  --destructive: hsl(0 80% 62%);
   --destructive-foreground: hsl(210 40% 98%);
-  --success: hsl(142 71% 45%);
-  --warning: hsl(38 92% 50%);
-  --border: hsl(217 33% 20%);
-  --input: hsl(217 33% 20%);
-  --ring: hsl(213 27% 84%);
+  --success: hsl(152 100% 45%);
+  --warning: hsl(38 95% 55%);
+  --border: hsl(205 38% 16%);
+  --input: hsl(205 38% 18%);
+  --ring: hsl(190 100% 50%);
 }
 
 @theme inline {
@@ -81,6 +87,7 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
 * {
@@ -91,6 +98,29 @@ body {
   margin: 0;
   background-color: var(--background);
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+
+  /* Assinatura visual da Nexus: brilho ciano/roxo nos cantos + grade sutil. */
+  background-image:
+    radial-gradient(circle at 12% -10%, rgba(0, 212, 255, 0.1), transparent 42%),
+    radial-gradient(circle at 100% 110%, rgba(123, 47, 255, 0.1), transparent 45%),
+    linear-gradient(rgba(0, 212, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.022) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    64px 64px,
+    64px 64px;
+  background-attachment: fixed;
+}
+
+/* Títulos na fonte de marca (Space Grotesk), levemente condensada. */
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
 }

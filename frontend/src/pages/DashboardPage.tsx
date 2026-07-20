@@ -39,7 +39,7 @@ export function DashboardPage() {
             icon={Receipt}
             label="Multas a revisar"
             value={multasRevisar.data?.total}
-            tone="text-[hsl(32_85%_38%)]"
+            tone="text-warning"
           />
           <Stat
             to="/cadastros"
@@ -103,13 +103,17 @@ function Stat({
 }) {
   return (
     <Link to={to}>
-      <Card className="transition-colors hover:bg-muted/40">
+      <Card className="group relative overflow-hidden transition-all hover:border-primary/40 hover:shadow-[0_0_24px_-4px_rgba(0,212,255,0.25)]">
+        {/* barra de gradiente no topo — assinatura visual da Nexus */}
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]" />
         <CardContent className="flex items-center gap-4 p-5">
-          <div className={`flex h-11 w-11 items-center justify-center rounded-lg bg-muted ${tone}`}>
+          <div
+            className={`flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-white/5 ${tone}`}
+          >
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-2xl font-semibold">{value ?? '—'}</div>
+            <div className="font-display text-3xl font-bold">{value ?? '—'}</div>
             <div className="text-xs text-muted-foreground">{label}</div>
           </div>
         </CardContent>

@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import {
+  useConsultarVeiculo,
+  useConsumoConsultas,
   useMotoristaMutations,
   useMotoristas,
   useRotaMutations,
@@ -96,8 +98,12 @@ function TabToolbar({ label, onNew }: { label: string; onNew: () => void }) {
 function VeiculosTab() {
   const { data, isLoading, error } = useVeiculos()
   const { remover } = useVeiculoMutations()
+  const consumo = useConsumoConsultas()
+  const consultar = useConsultarVeiculo()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Veiculo | null>(null)
+  const [buscandoId, setBuscandoId] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<{ tom: 'ok' | 'erro'; texto: string } | null>(null)
 
   const novo = () => {
     setEditando(null)
@@ -111,9 +117,60 @@ function VeiculosTab() {
     if (confirm(`Excluir o veículo ${v.placa}?`)) remover.mutate(v.id)
   }
 
+  const buscarDebitos = (v: Veiculo) => {
+    setAviso(null)
+    setBuscandoId(v.id)
+    consultar.mutate(v.id, {
+      onSuccess: (r) => {
+        const base = `${v.placa}: ${r.multasEncontradas} encontrada(s) — ${r.multasNovas} nova(s), ${r.multasDuplicadas} já existente(s).`
+        setAviso({
+          tom: 'ok',
+          texto: r.simulado ? `${base} (modo simulado, sem custo)` : base,
+        })
+      },
+      onError: (e: unknown) => {
+        setAviso({ tom: 'erro', texto: e instanceof Error ? e.message : 'Falha na consulta.' })
+      },
+      onSettled: () => setBuscandoId(null),
+    })
+  }
+
+  const c = consumo.data
+
   return (
     <div className="space-y-3">
-      <TabToolbar label="Novo veículo" onNew={novo} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {c && (
+          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-3 py-1.5 text-xs">
+            <ReceiptText className="h-4 w-4 text-primary" />
+            <span className="text-muted-foreground">Consultas de débitos este mês:</span>
+            <span className="font-semibold text-foreground">
+              {c.usados}
+              {c.limite !== null ? ` / ${c.limite}` : ' (ilimitado)'}
+            </span>
+            {!c.configurado && (
+              <Badge variant="muted" className="ml-1">
+                modo simulado
+              </Badge>
+            )}
+          </div>
+        )}
+        <TabToolbar label="Novo veículo" onNew={novo} />
+      </div>
+
+      {aviso && (
+        <p
+          className={cn(
+            'rounded-md px-3 py-2 text-sm',
+            aviso.tom === 'ok'
+              ? 'bg-primary/10 text-primary'
+              : 'bg-destructive/10 text-destructive',
+          )}
+        >
+          {aviso.texto}
+        </p>
+      )}
+
       {isLoading || error || !data?.length ? (
         <DataState isLoading={isLoading} error={error} isEmpty={!data?.length} />
       ) : (
@@ -139,7 +196,19 @@ function VeiculosTab() {
                   <AtivoBadge ativo={v.ativo} />
                 </TD>
                 <TD>
-                  <RowActions onEdit={() => editar(v)} onDelete={() => excluir(v)} />
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => buscarDebitos(v)}
+                      disabled={buscandoId === v.id}
+                      title="Buscar débitos e multas na Infosimples"
+                    >
+                      <ReceiptText className="h-4 w-4" />
+                      {buscandoId === v.id ? 'Buscando…' : 'Buscar débitos'}
+                    </Button>
+                    <RowActions onEdit={() => editar(v)} onDelete={() => excluir(v)} />
+                  </div>
                 </TD>
               </TR>
             ))}

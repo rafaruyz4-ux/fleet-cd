@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Frota CD — Arquitetura (Nexus Orbital)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  :root { --cyan:#00D4FF; --purple:#7B2FFF; --green:#00E87A; --dark:#050A14; --text:#E8F4FF; --dim:#8BA8C8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { background:var(--dark); color:var(--text); font-family:'Inter',sans-serif; }
+  body {
+    min-height:100vh; padding:40px 24px 64px;
+    background-image:
+      radial-gradient(circle at 12% -10%, rgba(0,212,255,0.10), transparent 42%),
+      radial-gradient(circle at 100% 110%, rgba(123,47,255,0.10), transparent 45%),
+      linear-gradient(rgba(0,212,255,0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.022) 1px, transparent 1px);
+    background-size:100% 100%, 100% 100%, 64px 64px, 64px 64px;
+    background-attachment:fixed;
+  }
+  header { max-width:1100px; margin:0 auto 28px; text-align:center; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.3em; text-transform:uppercase;
+         color:var(--cyan); border:1px solid rgba(0,212,255,.3); background:rgba(0,212,255,.07);
+         padding:6px 16px; border-radius:20px; margin-bottom:16px; }
+  h1 { font-family:'Space Grotesk',sans-serif; font-size:clamp(28px,5vw,46px); font-weight:700;
+       letter-spacing:-.02em; text-shadow:0 0 40px rgba(0,212,255,.35); }
+  h1 span { color:var(--cyan); }
+  .sub { color:var(--dim); font-weight:300; font-size:clamp(14px,1.8vw,18px); margin-top:8px; }
+  .stage {
+    max-width:1180px; margin:0 auto; background:rgba(8,15,30,.55); border:1px solid rgba(0,212,255,.18);
+    border-radius:20px; padding:24px; backdrop-filter:blur(8px);
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.8);
+  }
+  .mermaid { display:flex; justify-content:center; }
+  .legend { max-width:1180px; margin:22px auto 0; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  .chip { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--dim);
+          background:rgba(8,15,30,.6); border:1px solid rgba(0,212,255,.15); border-radius:30px; padding:7px 14px; }
+  .dot { width:10px; height:10px; border-radius:3px; }
+  footer { max-width:1180px; margin:28px auto 0; text-align:center; color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="tag">Nexus Orbital · Documentação</div>
+    <h1>Frota <span>CD</span> — como o sistema é montado</h1>
+    <p class="sub">Do clique do gestor até o banco de dados, em linguagem simples.</p>
+  </header>
+
+  <div class="stage">
+    <pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{
+  'fontFamily':'Inter, sans-serif',
+  'primaryColor':'#0c1830','primaryTextColor':'#E8F4FF','primaryBorderColor':'#00D4FF',
+  'lineColor':'#3a6ea5','clusterBkg':'rgba(0,212,255,0.04)','clusterBorder':'rgba(0,212,255,0.25)',
+  'fontSize':'15px'
+}}}%%
+flowchart TB
+  G["👤 Gestor<br/><small>no navegador</small>"]:::user
+
+  subgraph VITRINE["🖥️  VITRINE — a tela (frontend)"]
+    direction TB
+    TELAS["Telas: Visão geral, Viagens,<br/>Alertas, Multas, Notas, Cadastros, Mapa"]:::front
+  end
+
+  subgraph MOTOR["⚙️  MOTOR — o backend (a parte que ninguém vê)"]
+    direction TB
+    PORTARIA["🛡️ Portaria / Segurança<br/><small>quem pode entrar · limite de login · empresa certa</small>"]:::sec
+
+    subgraph DEPTS["🏢 Departamentos (módulos) — cada um: balcão · porteiro · trabalhador"]
+      direction LR
+      D1["Veículos"]:::mod
+      D2["Motoristas"]:::mod
+      D3["Viagens / Rotas"]:::mod
+      D4["Alertas"]:::mod
+      D5["Multas"]:::mod
+      D6["Notas fiscais"]:::mod
+      D7["GPS"]:::mod
+      D8["Empresas + Cobrança"]:::mod
+    end
+
+    REGRAS["📐 Regras do negócio + peças reutilizáveis<br/><small>(faxina do Pacote 2)</small>"]:::shared
+  end
+
+  AUTO["🤖 Funcionários automáticos<br/><small>apagam GPS antigo (LGPD)<br/>fecham viagem sem sinal</small>"]:::auto
+  EXT["🌐 Mundo externo<br/><small>SEFAZ · Mapas · Asaas (pagamento)</small>"]:::ext
+  DB[("🗄️ Banco de dados<br/><small>guarda tudo · histórico em 7 etapas</small>")]:::db
+
+  G <--> TELAS
+  TELAS <-->|"pede / recebe pela internet"| PORTARIA
+  PORTARIA --> DEPTS
+  DEPTS --> REGRAS
+  DEPTS <--> DB
+  AUTO --> DB
+  DEPTS <--> EXT
+
+  classDef user fill:#7B2FFF22,stroke:#7B2FFF,stroke-width:2px,color:#E8F4FF;
+  classDef front fill:#00D4FF18,stroke:#00D4FF,stroke-width:2px,color:#E8F4FF;
+  classDef sec fill:#00E87A18,stroke:#00E87A,stroke-width:2px,color:#E8F4FF;
+  classDef mod fill:#0e1c34,stroke:#2f7fb5,stroke-width:1.5px,color:#E8F4FF;
+  classDef shared fill:#7B2FFF18,stroke:#7B2FFF,stroke-width:1.5px,color:#E8F4FF;
+  classDef auto fill:#11203a,stroke:#00D4FF,stroke-width:1.5px,color:#E8F4FF;
+  classDef ext fill:#11203a,stroke:#C8892E,stroke-width:1.5px,color:#E8F4FF;
+  classDef db fill:#0a1426,stroke:#00D4FF,stroke-width:2px,color:#E8F4FF;
+    </pre>
+  </div>
+
+  <div class="legend">
+    <div class="chip"><span class="dot" style="background:#7B2FFF"></span> Quem usa</div>
+    <div class="chip"><span class="dot" style="background:#00D4FF"></span> Tela (frontend)</div>
+    <div class="chip"><span class="dot" style="background:#00E87A"></span> Segurança</div>
+    <div class="chip"><span class="dot" style="background:#2f7fb5"></span> Departamentos</div>
+    <div class="chip"><span class="dot" style="background:#C8892E"></span> Mundo externo</div>
+  </div>
+
+  <footer>112 testes automáticos vigiam tudo isso · multi-cliente (cada empresa só vê os próprios dados)</footer>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad:true, securityLevel:'loose' });
+  </script>
+</body>
+</html>

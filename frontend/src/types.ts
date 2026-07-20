@@ -11,6 +11,19 @@ export interface UsuarioPublico {
   superAdmin: boolean
 }
 
+/** Faixa de plano (cobrança por tamanho de frota). Espelha src/domain/planos.ts. */
+export type PlanoFaixa = 'starter' | 'pro' | 'enterprise'
+
+/** Assinatura da própria empresa (GET /assinatura). */
+export interface AssinaturaPublica {
+  faixa: PlanoFaixa
+  plano: string // nome do plano (ex.: "Pro")
+  status: string // trial | ativo | suspenso | cancelado
+  limiteVeiculos: number | null // null = ilimitado
+  veiculosUsados: number
+  precoMensalCentavos: number
+}
+
 /** Empresa-cliente, como listada no backoffice (super admin). */
 export interface Empresa {
   id: string

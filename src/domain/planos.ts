@@ -9,16 +9,32 @@ export interface Plano {
   nome: string;
   // null = ilimitado.
   limiteVeiculos: number | null;
+  // Teto de consultas de débitos/multas (Infosimples) por mês. null = ilimitado.
+  // Protege o custo da conta única da Nexus e diferencia os planos.
+  limiteConsultasMes: number | null;
   precoMensalCentavos: number;
 }
 
 export const PLANOS: Record<PlanoFaixa, Plano> = {
-  starter: { faixa: 'starter', nome: 'Starter', limiteVeiculos: 5, precoMensalCentavos: 9900 },
-  pro: { faixa: 'pro', nome: 'Pro', limiteVeiculos: 20, precoMensalCentavos: 24900 },
+  starter: {
+    faixa: 'starter',
+    nome: 'Starter',
+    limiteVeiculos: 5,
+    limiteConsultasMes: 50,
+    precoMensalCentavos: 9900,
+  },
+  pro: {
+    faixa: 'pro',
+    nome: 'Pro',
+    limiteVeiculos: 20,
+    limiteConsultasMes: 200,
+    precoMensalCentavos: 24900,
+  },
   enterprise: {
     faixa: 'enterprise',
     nome: 'Enterprise',
     limiteVeiculos: null,
+    limiteConsultasMes: null,
     precoMensalCentavos: 59900,
   },
 };

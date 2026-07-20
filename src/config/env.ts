@@ -99,6 +99,33 @@ export const env = {
     webhookToken: process.env.ASAAS_WEBHOOK_TOKEN,
   },
 
+  // Consulta de débitos/multas via Infosimples (conta ÚNICA da Nexus, usada
+  // para todos os clientes). Sem INFOSIMPLES_API_KEY o sistema roda em "modo
+  // simulado": devolve dados de exemplo SEM chamar a Infosimples e SEM custo —
+  // serve para testar o fluxo (botão, contador, criação de multas) por dentro
+  // do sistema antes de ter a chave. Com a chave, faz a consulta real.
+  infosimples: {
+    apiKey: process.env.INFOSIMPLES_API_KEY,
+    baseUrl: optional('INFOSIMPLES_BASE_URL', 'https://api.infosimples.com/api/v2'),
+    // Caminho da consulta escolhida no catálogo da Infosimples (varia por UF).
+    // Ex.: 'detran/sp/debitos', 'sefaz/sp/debitos-veiculo'.
+    endpoint: optional('INFOSIMPLES_ENDPOINT', 'detran/sp/debitos'),
+    // Credenciais do portal do governo, exigidas pelas consultas de débito de
+    // SP (login do portal e, na SEFAZ, certificado digital A1). Opcionais: só
+    // são enviadas quando preenchidas.
+    loginCpf: process.env.INFOSIMPLES_LOGIN_CPF,
+    loginSenha: process.env.INFOSIMPLES_LOGIN_SENHA,
+    // Certificado A1 em base64 + senha (para consultas que exigem certificado).
+    pkcs12Base64: process.env.INFOSIMPLES_PKCS12_BASE64,
+    pkcs12Pass: process.env.INFOSIMPLES_PKCS12_PASS,
+    // Janela de datas para consultas de multas que pedem período (ex.: RENAINF).
+    janelaDias: numberEnv('INFOSIMPLES_JANELA_DIAS', '1825'), // ~5 anos
+    // Custo estimado por consulta, em centavos — usado só para o contador de
+    // consumo (a cobrança real é feita pela Infosimples na conta da Nexus).
+    custoCentavos: numberEnv('INFOSIMPLES_CUSTO_CENTAVOS', '25'),
+    timeoutMs: numberEnv('INFOSIMPLES_TIMEOUT_S', '60') * 1000,
+  },
+
   // LGPD: por quanto tempo guardar o histórico de posições GPS antes de apagar
   // automaticamente (minimização de dados de localização).
   lgpd: {

@@ -3,7 +3,10 @@ import { useAuth } from '@/lib/auth'
 import { PageLoader } from '@/components/ui/spinner'
 import { AppLayout } from '@/components/AppLayout'
 import { LoginPage } from '@/pages/LoginPage'
+import { EsqueciSenhaPage } from '@/pages/EsqueciSenhaPage'
+import { RedefinirSenhaPage } from '@/pages/RedefinirSenhaPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { AssinaturaPage } from '@/pages/AssinaturaPage'
 import { ViagensPage } from '@/pages/ViagensPage'
 import { ViagemDetailPage } from '@/pages/ViagemDetailPage'
 import { AlertasPage } from '@/pages/AlertasPage'
@@ -37,6 +40,8 @@ export function App() {
           loading ? <PageLoader /> : usuario ? <Navigate to="/" replace /> : <LoginPage />
         }
       />
+      <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
+      <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
       <Route
         element={
           <RequireAuth>
@@ -51,6 +56,7 @@ export function App() {
         <Route path="multas" element={<MultasPage />} />
         <Route path="nfs" element={<NfsPage />} />
         <Route path="cadastros" element={<CadastrosPage />} />
+        <Route path="assinatura" element={<AssinaturaPage />} />
         <Route path="bastidores" element={<RequireSuperAdmin><BackofficePage /></RequireSuperAdmin>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
