@@ -39,6 +39,15 @@ if (isProduction && (corsOrigins.length === 0 || corsOrigins.includes('*'))) {
   );
 }
 
+// Sem token, o webhook do Asaas aceitaria POST anônimo — qualquer um poderia
+// "confirmar pagamento" e reativar (ou suspender) assinaturas. Em produção o
+// token é obrigatório; em dev/teste segue opcional (mesmo padrão do CORS acima).
+if (isProduction && !process.env.ASAAS_WEBHOOK_TOKEN) {
+  throw new Error(
+    'ASAAS_WEBHOOK_TOKEN é obrigatório quando NODE_ENV=production (protege o webhook do Asaas)',
+  );
+}
+
 export const env = {
   nodeEnv,
   isProduction,

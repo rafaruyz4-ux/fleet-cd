@@ -1,6 +1,13 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { AppError } from '../errors/AppError';
 import { verifyAccessToken, type AccessTokenPayload, type Papel } from '../utils/jwt';
+import { asyncHandler } from './asyncHandler';
+import {
+  empresaBloqueada,
+  erroAssinaturaSuspensa,
+  motoristaEstaAtivo,
+  statusDaEmpresa,
+} from './acesso';
 
 // Anexa o principal autenticado (gestor ou motorista) ao request.
 declare global {
@@ -24,21 +31,53 @@ export function tenantId(req: Request): string {
   return req.user.empresaId;
 }
 
-/** Exige um access token JWT válido no header Authorization: Bearer <token>. */
-export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
+// Rotas que continuam acessíveis com a assinatura suspensa/cancelada: a área
+// de assinatura (o cliente precisa conseguir pagar/reativar) e a de auth
+// (login/refresh/me — o bloqueio fino de motorista é feito no auth.service).
+const BASES_LIBERADAS_COM_ASSINATURA_SUSPENSA = ['/api/assinatura', '/api/auth'];
+
+/**
+ * Exige um access token JWT válido no header Authorization: Bearer <token>.
+ * Além do JWT, valida (com cache de ~60s, ver acesso.ts):
+ *  - motorista ainda ativo — revoga na prática o device token de 365 dias;
+ *  - assinatura da empresa — suspensa/cancelada só acessa a área de assinatura.
+ */
+export const requireAuth: RequestHandler = asyncHandler(async (req, _res, next) => {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     throw AppError.unauthorized('Token de acesso ausente');
   }
 
   const token = header.slice('Bearer '.length).trim();
+  let payload: AccessTokenPayload;
   try {
-    req.user = verifyAccessToken(token);
-    next();
+    payload = verifyAccessToken(token);
   } catch {
     throw AppError.unauthorized('Token de acesso inválido ou expirado');
   }
-}
+
+  // Motorista demitido (soft delete) não usa mais o sistema, mesmo com device
+  // token válido por assinatura/prazo.
+  if (payload.tipo === 'motorista' && !(await motoristaEstaAtivo(payload.sub))) {
+    throw AppError.unauthorized('Motorista inativo ou sem acesso');
+  }
+
+  // Empresa suspensa/cancelada/inativa: bloqueia tudo, exceto as rotas
+  // liberadas acima. Super admin (backoffice da plataforma) não é bloqueado.
+  const superAdmin = payload.tipo === 'usuario' && payload.superAdmin;
+  if (!superAdmin) {
+    const status = await statusDaEmpresa(payload.empresaId);
+    const rotaLiberada = BASES_LIBERADAS_COM_ASSINATURA_SUSPENSA.some(
+      (base) => req.baseUrl === base || req.baseUrl.startsWith(`${base}/`),
+    );
+    if (empresaBloqueada(status) && !rotaLiberada) {
+      throw erroAssinaturaSuspensa();
+    }
+  }
+
+  req.user = payload;
+  next();
+});
 
 /** Exige que o principal seja um usuário do dashboard (gestor/admin). */
 export function requireUsuario(req: Request, _res: Response, next: NextFunction): void {

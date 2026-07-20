@@ -14,9 +14,9 @@ interface RespAsaas {
   id: string;
 }
 
-async function chamar(path: string, body: unknown): Promise<RespAsaas> {
+async function chamar(method: 'POST' | 'PUT', path: string, body: unknown): Promise<RespAsaas> {
   const res = await fetch(`${env.asaas.baseUrl}${path}`, {
-    method: 'POST',
+    method,
     headers: {
       'Content-Type': 'application/json',
       access_token: env.asaas.apiKey as string,
@@ -35,36 +35,58 @@ export interface DadosAssinatura {
   cnpj: string | null;
   email: string;
   plano: Plano;
+  // Ids já gravados no banco (se a empresa já assinou antes): são REUSADOS,
+  // para nunca deixar duas assinaturas ativas no Asaas para a mesma empresa.
+  customerId?: string | null;
+  subscriptionId?: string | null;
 }
 
 /**
- * Garante um cliente + assinatura recorrente mensal no Asaas para a empresa.
- * Devolve os ids para guardarmos no banco. Em modo simulado, ids fictícios.
+ * Garante UM cliente + UMA assinatura recorrente mensal no Asaas para a empresa:
+ *  - cliente já existe → reusa (não cria duplicado);
+ *  - assinatura já existe → atualiza o valor via PUT /subscriptions/{id}
+ *    (mais simples que cancelar e recriar: mantém o histórico de cobranças e
+ *    não abre janela com duas assinaturas ativas);
+ *  - senão, cria. Em modo simulado, ids fictícios (também reusados).
  */
-export async function criarClienteEAssinatura(
+export async function garantirClienteEAssinatura(
   dados: DadosAssinatura,
 ): Promise<{ customerId: string; subscriptionId: string }> {
   if (!asaasAtivo()) {
-    // Modo simulado: ids fictícios únicos (cada assinatura é distinta, como no Asaas real).
+    // Modo simulado: reusa os ids fictícios existentes ou gera novos únicos.
     return {
-      customerId: `sim_cus_${randomBytes(8).toString('hex')}`,
-      subscriptionId: `sim_sub_${randomBytes(8).toString('hex')}`,
+      customerId: dados.customerId ?? `sim_cus_${randomBytes(8).toString('hex')}`,
+      subscriptionId: dados.subscriptionId ?? `sim_sub_${randomBytes(8).toString('hex')}`,
     };
   }
 
-  const cliente = await chamar('/customers', {
-    name: dados.nome,
-    cpfCnpj: dados.cnpj ?? undefined,
-    email: dados.email,
-  });
+  const customerId =
+    dados.customerId ??
+    (
+      await chamar('POST', '/customers', {
+        name: dados.nome,
+        cpfCnpj: dados.cnpj ?? undefined,
+        email: dados.email,
+      })
+    ).id;
 
-  const assinatura = await chamar('/subscriptions', {
-    customer: cliente.id,
+  if (dados.subscriptionId) {
+    await chamar('PUT', `/subscriptions/${dados.subscriptionId}`, {
+      value: dados.plano.precoMensalCentavos / 100,
+      description: `Fleet CD — plano ${dados.plano.nome}`,
+      // Ajusta também a cobrança em aberto (o cliente paga já o valor novo).
+      updatePendingPayments: true,
+    });
+    return { customerId, subscriptionId: dados.subscriptionId };
+  }
+
+  const assinatura = await chamar('POST', '/subscriptions', {
+    customer: customerId,
     billingType: 'UNDEFINED', // cliente escolhe Pix/boleto/cartão
     cycle: 'MONTHLY',
     value: dados.plano.precoMensalCentavos / 100,
     description: `Fleet CD — plano ${dados.plano.nome}`,
   });
 
-  return { customerId: cliente.id, subscriptionId: assinatura.id };
+  return { customerId, subscriptionId: assinatura.id };
 }

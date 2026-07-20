@@ -1,6 +1,7 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
 import { MontadorUpdate } from '../../db/sql';
+import { invalidarCacheMotorista } from '../../middleware/acesso';
 import { hashPassword } from '../../utils/password';
 import { signDeviceToken } from '../../utils/jwt';
 import { env } from '../../config/env';
@@ -82,7 +83,11 @@ export async function update(
   if (input.categoria_cnh !== undefined) u.set('categoria_cnh', input.categoria_cnh);
   if (input.validade_cnh !== undefined) u.set('validade_cnh', input.validade_cnh);
   if (input.telefone !== undefined) u.set('telefone', input.telefone);
-  if (input.ativo !== undefined) u.set('ativo', input.ativo);
+  if (input.ativo !== undefined) {
+    u.set('ativo', input.ativo);
+    // Desativação vale já (o cache de acesso guarda o 'ativo' por ~60s).
+    invalidarCacheMotorista(id);
+  }
   if (input.senha !== undefined) u.set('senha_hash', await hashPassword(input.senha));
 
   if (u.vazio) {
@@ -130,4 +135,6 @@ export async function remove(empresaId: string, id: string): Promise<void> {
   if (!row) {
     throw AppError.notFound('Motorista não encontrado');
   }
+  // Corta o acesso do app/device token imediatamente (cache de ~60s).
+  invalidarCacheMotorista(id);
 }

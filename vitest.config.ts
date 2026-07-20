@@ -18,6 +18,12 @@ export default defineConfig({
       JWT_REFRESH_TTL: '7d',
       BCRYPT_ROUNDS: '4', // hashing rápido nos testes
       CORS_ORIGINS: '*',
+      // Testes NUNCA chamam APIs pagas de verdade: zera as chaves para forçar
+      // o modo simulado, mesmo que o .env local do dev tenha chaves reais
+      // (o dotenv não sobrescreve o que já veio daqui).
+      INFOSIMPLES_API_KEY: '',
+      ASAAS_API_KEY: '',
+      ASAAS_WEBHOOK_TOKEN: '',
     },
     testTimeout: 20000,
     hookTimeout: 30000,

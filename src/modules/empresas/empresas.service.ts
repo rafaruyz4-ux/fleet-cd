@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { MontadorUpdate } from '../../db/sql';
+import { invalidarCacheEmpresa } from '../../middleware/acesso';
 import { hashPassword } from '../../utils/password';
 import type { AtualizarEmpresaInput, CriarEmpresaInput } from './empresas.schemas';
 
@@ -123,6 +124,8 @@ export async function atualizar(id: string, input: AtualizarEmpresaInput): Promi
   if (!u.vazio) {
     const idPh = u.ph(id);
     await query(`UPDATE empresas SET ${u.sql} WHERE id = ${idPh}`, u.valores);
+    // Mudança de plano/ativo pelo backoffice vale já (cache de acesso de ~60s).
+    invalidarCacheEmpresa(id);
   }
   return obter(id);
 }

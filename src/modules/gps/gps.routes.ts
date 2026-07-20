@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
+import { empresaBloqueada, motoristaEstaAtivo, statusDaEmpresa } from '../../middleware/acesso';
 import { requireAuth, requireMotorista } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { verifyAccessToken } from '../../utils/jwt';
@@ -80,6 +81,17 @@ deviceRouter.post(
     }
     if (!motoristaId || !empresaId) {
       res.status(401).json({ result: 'error', error: 'Token de dispositivo inválido' });
+      return;
+    }
+    // Este router NÃO passa pelo requireAuth, então repete as mesmas travas:
+    // motorista demitido (device token de 365d não é revogável por si só) e
+    // empresa com assinatura suspensa param de ingerir GPS.
+    if (!(await motoristaEstaAtivo(motoristaId))) {
+      res.status(401).json({ result: 'error', error: 'Motorista inativo ou sem acesso' });
+      return;
+    }
+    if (empresaBloqueada(await statusDaEmpresa(empresaId))) {
+      res.status(403).json({ result: 'error', error: 'Assinatura suspensa' });
       return;
     }
     const result = await service.ingestOverland(empresaId, motoristaId, req.body);

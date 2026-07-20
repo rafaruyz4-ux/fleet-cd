@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ADMIN_EMAIL, ADMIN_SENHA } from './config';
 import { api, bearer, criarMotorista, loginGestor, loginMotoristaApp } from './helpers';
 
@@ -74,6 +74,11 @@ describe('auth — isolamento de principais', () => {
   let motorista: string;
   beforeAll(async () => {
     gestor = await loginGestor();
+  });
+  // O motorista precisa ser criado POR teste: o TRUNCATE do setup apaga a
+  // tabela, e agora token de motorista que não existe mais responde 401
+  // (revogação prática do device token — Pacote 5).
+  beforeEach(async () => {
     motorista = (await loginMotoristaApp(gestor)).appToken;
   });
 

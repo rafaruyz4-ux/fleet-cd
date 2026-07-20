@@ -1,20 +1,24 @@
 import { AppError } from '../../errors/AppError';
 import { query, queryOne } from '../../db/pool';
 import { PLANOS, type PlanoFaixa } from '../../domain/planos';
-import { criarClienteEAssinatura } from '../../infra/asaas';
+import { garantirClienteEAssinatura } from '../../infra/asaas';
+import { invalidarCacheEmpresa } from '../../middleware/acesso';
 
 interface EmpresaAssinaturaRow {
   id: string;
   nome: string;
   cnpj: string | null;
-  plano: string; // status: trial|ativo|suspenso|cancelado
+  plano: string; // status: trial|ativo|pendente|suspenso|cancelado
   plano_faixa: PlanoFaixa;
+  plano_faixa_pendente: PlanoFaixa | null;
   asaas_customer_id: string | null;
   asaas_subscription_id: string | null;
 }
 
 export interface AssinaturaPublica {
   faixa: PlanoFaixa;
+  // Faixa aguardando confirmação de pagamento (null quando não há troca em curso).
+  faixaPendente: PlanoFaixa | null;
   plano: string;
   status: string;
   limiteVeiculos: number | null;
@@ -32,7 +36,8 @@ async function contarVeiculosAtivos(empresaId: string): Promise<number> {
 
 async function buscarEmpresa(empresaId: string): Promise<EmpresaAssinaturaRow> {
   const e = await queryOne<EmpresaAssinaturaRow>(
-    `SELECT id, nome, cnpj, plano, plano_faixa, asaas_customer_id, asaas_subscription_id
+    `SELECT id, nome, cnpj, plano, plano_faixa, plano_faixa_pendente,
+            asaas_customer_id, asaas_subscription_id
      FROM empresas WHERE id = $1`,
     [empresaId],
   );
@@ -45,6 +50,7 @@ export async function obterAssinatura(empresaId: string): Promise<AssinaturaPubl
   const p = PLANOS[e.plano_faixa];
   return {
     faixa: e.plano_faixa,
+    faixaPendente: e.plano_faixa_pendente,
     plano: p.nome,
     status: e.plano,
     limiteVeiculos: p.limiteVeiculos,
@@ -70,9 +76,12 @@ export async function assertPodeAdicionarVeiculo(empresaId: string): Promise<voi
 }
 
 /**
- * Troca o plano da empresa. Em downgrade, recusa se a frota ativa não couber no
- * novo limite. Cria/atualiza a assinatura no Asaas (simulado sem chave) e marca
- * a empresa como ativa.
+ * Solicita a troca de plano da empresa. Em downgrade, recusa se a frota ativa
+ * não couber no novo limite. Garante a assinatura no Asaas (reusada/atualizada;
+ * simulada sem chave) e deixa a nova faixa PENDENTE: ela só entra em vigor
+ * quando o webhook confirmar o pagamento (PAYMENT_CONFIRMED/RECEIVED). Até lá
+ * o cliente mantém o plano atual — e, se estava suspenso/cancelado, continua
+ * bloqueado (senão bastaria "pedir upgrade" para destravar tudo sem pagar).
  */
 export async function mudarPlano(empresaId: string, faixa: PlanoFaixa): Promise<AssinaturaPublica> {
   const e = await buscarEmpresa(empresaId);
@@ -93,22 +102,29 @@ export async function mudarPlano(empresaId: string, faixa: PlanoFaixa): Promise<
     [empresaId],
   );
 
-  const { customerId, subscriptionId } = await criarClienteEAssinatura({
+  const { customerId, subscriptionId } = await garantirClienteEAssinatura({
     nome: e.nome,
     cnpj: e.cnpj,
     email: admin?.email ?? `empresa-${empresaId}@fleetcd.local`,
     plano: p,
+    customerId: e.asaas_customer_id,
+    subscriptionId: e.asaas_subscription_id,
   });
+
+  // Suspensa/cancelada permanece bloqueada até o pagamento; nos demais casos o
+  // status vira 'pendente' (não bloqueia — o plano ATUAL segue valendo).
+  const novoStatus = e.plano === 'suspenso' || e.plano === 'cancelado' ? e.plano : 'pendente';
 
   await query(
     `UPDATE empresas
-       SET plano_faixa = $1,
-           plano = 'ativo',
-           asaas_customer_id = COALESCE(asaas_customer_id, $2),
-           asaas_subscription_id = $3
-     WHERE id = $4`,
-    [faixa, customerId, subscriptionId, empresaId],
+       SET plano_faixa_pendente = $1,
+           plano = $2,
+           asaas_customer_id = COALESCE(asaas_customer_id, $3),
+           asaas_subscription_id = $4
+     WHERE id = $5`,
+    [faixa, novoStatus, customerId, subscriptionId, empresaId],
   );
+  invalidarCacheEmpresa(empresaId);
 
   return obterAssinatura(empresaId);
 }
@@ -124,8 +140,9 @@ const EVENTO_PARA_STATUS: Record<string, string> = {
 
 /**
  * Processa um webhook do Asaas: encontra a empresa pela assinatura e ajusta o
- * status conforme o evento de pagamento. Ignora eventos/assinaturas que não
- * conhecemos (idempotente).
+ * status conforme o evento de pagamento. Pagamento confirmado também PROMOVE o
+ * plano pendente (é o único caminho que efetiva uma troca de plano). Ignora
+ * eventos/assinaturas que não conhecemos (idempotente).
  */
 export async function processarWebhook(
   evento: string,
@@ -134,8 +151,22 @@ export async function processarWebhook(
   const novoStatus = EVENTO_PARA_STATUS[evento];
   if (!novoStatus || !subscriptionId) return;
 
-  await query('UPDATE empresas SET plano = $1 WHERE asaas_subscription_id = $2', [
-    novoStatus,
-    subscriptionId,
-  ]);
+  const atualizadas =
+    novoStatus === 'ativo'
+      ? await query<{ id: string }>(
+          `UPDATE empresas
+             SET plano = 'ativo',
+                 plano_faixa = COALESCE(plano_faixa_pendente, plano_faixa),
+                 plano_faixa_pendente = NULL
+           WHERE asaas_subscription_id = $1
+           RETURNING id`,
+          [subscriptionId],
+        )
+      : await query<{ id: string }>(
+          'UPDATE empresas SET plano = $1 WHERE asaas_subscription_id = $2 RETURNING id',
+          [novoStatus, subscriptionId],
+        );
+
+  // Suspensão/reativação precisa valer imediatamente, não dali a ~60s.
+  for (const e of atualizadas) invalidarCacheEmpresa(e.id);
 }

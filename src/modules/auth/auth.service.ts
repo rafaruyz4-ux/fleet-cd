@@ -1,5 +1,10 @@
 import { AppError } from '../../errors/AppError';
 import { queryOne } from '../../db/pool';
+import {
+  empresaBloqueada,
+  erroAssinaturaSuspensa,
+  statusDaEmpresa,
+} from '../../middleware/acesso';
 import { verifyPassword } from '../../utils/password';
 import {
   signAccessToken,
@@ -148,6 +153,12 @@ export async function loginMotorista(cpf: string, senha: string): Promise<Motori
     throw credenciaisInvalidas;
   }
 
+  // Empresa suspensa/cancelada/inativa: motorista não entra (não há o que ele
+  // fazer no app; quem regulariza é o gestor, que continua conseguindo logar).
+  if (empresaBloqueada(await statusDaEmpresa(motorista.empresa_id))) {
+    throw erroAssinaturaSuspensa();
+  }
+
   return {
     motorista: await getMotoristaById(motorista.id),
     accessToken: signAccessToken(motoristaPayload(motorista)),
@@ -189,6 +200,10 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
     ]);
     if (!row || !row.ativo || !row.senha_hash) {
       throw AppError.unauthorized('Motorista não encontrado ou sem acesso');
+    }
+    // Mesmo bloqueio do login: empresa suspensa não renova token de motorista.
+    if (empresaBloqueada(await statusDaEmpresa(row.empresa_id))) {
+      throw erroAssinaturaSuspensa();
     }
     return { accessToken: signAccessToken(motoristaPayload(row)) };
   }
