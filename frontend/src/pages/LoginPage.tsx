@@ -27,7 +27,7 @@ export function LoginPage() {
       setErro(
         err instanceof ApiError && err.status === 401
           ? 'E-mail ou senha inválidos.'
-          : 'Não foi possível entrar. Verifique se a API está no ar.',
+          : 'Não foi possível conectar. Tente novamente.',
       )
     } finally {
       setEnviando(false)

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useRotaMutations } from '@/api/hooks'
 import { ApiError } from '@/lib/api'
 import type { LatLng, Rota } from '@/types'
@@ -70,6 +71,7 @@ export function RotaFormModal({
     try {
       if (editando) await atualizar.mutateAsync({ id: rota!.id, input })
       else await criar.mutateAsync(input)
+      toast.success(editando ? 'Rota atualizada.' : 'Rota cadastrada.')
       onClose()
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao salvar a rota.')

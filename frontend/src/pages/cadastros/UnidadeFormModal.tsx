@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useUnidadeMutations } from '@/api/hooks'
 import { ApiError } from '@/lib/api'
 import type { Unidade } from '@/types'
@@ -45,6 +46,7 @@ export function UnidadeFormModal({
     try {
       if (editando) await atualizar.mutateAsync({ id: unidade!.id, input })
       else await criar.mutateAsync(input)
+      toast.success(editando ? 'Unidade atualizada.' : 'Unidade cadastrada.')
       onClose()
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao salvar a unidade.')

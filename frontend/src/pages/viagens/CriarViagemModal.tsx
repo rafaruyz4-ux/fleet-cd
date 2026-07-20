@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import {
   useMotoristas,
@@ -51,6 +52,7 @@ export function CriarViagemModal({ open, onClose }: { open: boolean; onClose: ()
     }
     try {
       const viagem = await criar.mutateAsync(input)
+      toast.success('Viagem criada.')
       onClose()
       navigate(`/viagens/${viagem.id}`)
     } catch (err) {

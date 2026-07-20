@@ -23,6 +23,9 @@ interface TripMapProps {
   paradasDetectadas?: ParadaDetectada[]
   foco?: FocoMapa | null
   className?: string
+  /** A busca do trajeto (/posicoes) falhou — mostra erro em vez de "sem GPS ainda". */
+  erroTrajeto?: boolean
+  onTentarNovamente?: () => void
 }
 
 const ALERTA_COR: Record<string, string> = {
@@ -167,6 +170,8 @@ export function TripMap({
   paradasDetectadas,
   foco,
   className,
+  erroTrajeto,
+  onTentarNovamente,
 }: TripMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -368,12 +373,30 @@ export function TripMap({
   return (
     <div className={cn('relative overflow-hidden', className)}>
       <div ref={containerRef} className="h-full w-full" />
-      {semTrajeto && (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
-          <div className="rounded-full border border-white/10 bg-slate-900/85 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-md backdrop-blur">
-            Sem trajeto GPS ainda — aparece aqui quando o motorista enviar a localização.
+      {erroTrajeto ? (
+        // ERRO ≠ VAZIO: se a busca do trajeto falhou, avisa e oferece repetir.
+        <div className="absolute inset-x-0 top-3 z-10 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full border border-red-400/30 bg-slate-900/90 px-3 py-1.5 text-xs font-medium text-red-300 shadow-md backdrop-blur">
+            Erro ao carregar o trajeto.
+            {onTentarNovamente && (
+              <button
+                type="button"
+                onClick={onTentarNovamente}
+                className="rounded-full bg-red-400/15 px-2 py-0.5 font-semibold text-red-200 transition-colors hover:bg-red-400/25"
+              >
+                Tentar de novo
+              </button>
+            )}
           </div>
         </div>
+      ) : (
+        semTrajeto && (
+          <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
+            <div className="rounded-full border border-white/10 bg-slate-900/85 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-md backdrop-blur">
+              Sem trajeto GPS ainda — aparece aqui quando o motorista enviar a localização.
+            </div>
+          </div>
+        )
       )}
 
       {/* Controles do trajeto (canto superior esquerdo) */}

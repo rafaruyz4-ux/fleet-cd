@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { ArrowLeft, CheckCircle2, Crosshair, Flag, MapPin, Play, XCircle } from 'lucide-react'
 import type { FocoMapa } from '@/components/TripMap'
 import type { PontoTrajeto } from '@/types'
@@ -21,9 +22,11 @@ import {
 } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
 import { formatDuracaoMin, haversineM } from '@/lib/geo'
+import { EncerrarViagemModal } from './viagens/EncerrarViagemModal'
 
 // Lazy: o MapLibre (~pesado) só é baixado ao abrir o detalhe de uma viagem.
 const TripMap = lazy(() =>
@@ -35,7 +38,8 @@ export function ViagemDetailPage() {
   const { data: viagem, isLoading, error } = useViagem(id)
   // Atualiza a trajetória a cada 15s quando a viagem está em andamento.
   const emAndamento = viagem?.status === 'em_andamento'
-  const { data: trajetoria } = useTrajetoria(id, emAndamento ? 15_000 : undefined)
+  const trajetoriaQ = useTrajetoria(id, emAndamento ? 15_000 : undefined)
+  const trajetoria = trajetoriaQ.data
   // Trajeto encaixado nas ruas (atualiza junto da trajetória quando em andamento).
   const { data: trajetoRuas } = useTrajetoRuas(id, emAndamento ? 30_000 : undefined)
   const { data: alertas } = useAlertasDaViagem(id)
@@ -43,6 +47,8 @@ export function ViagemDetailPage() {
   const { iniciar, encerrar, cancelar, marcarParada } = useViagemMutations()
 
   const [foco, setFoco] = useState<FocoMapa | null>(null)
+  const [encerrarOpen, setEncerrarOpen] = useState(false)
+  const [cancelarOpen, setCancelarOpen] = useState(false)
   const mapaRef = useRef<HTMLDivElement>(null)
 
   // Faz o mapa "voar" até um ponto e traz o mapa para a vista.
@@ -88,17 +94,6 @@ export function ViagemDetailPage() {
   const busy =
     iniciar.isPending || encerrar.isPending || cancelar.isPending || marcarParada.isPending
 
-  const onEncerrar = () => {
-    const entrada = window.prompt('Km final (opcional):', '')
-    if (entrada === null) return // cancelou
-    const km = entrada.trim() === '' ? undefined : Number(entrada)
-    if (km !== undefined && Number.isNaN(km)) {
-      alert('Km final inválido.')
-      return
-    }
-    encerrar.mutate({ id: viagem.id, km_final: km })
-  }
-
   return (
     <div>
       <PageHeader
@@ -110,12 +105,20 @@ export function ViagemDetailPage() {
             {emAndamento && (
               <>
                 {!viagem.iniciada_em && (
-                  <Button size="sm" disabled={busy} onClick={() => iniciar.mutate(viagem.id)}>
+                  <Button
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      iniciar.mutate(viagem.id, {
+                        onSuccess: () => toast.success('Viagem iniciada.'),
+                      })
+                    }
+                  >
                     <Play className="h-4 w-4" /> Iniciar
                   </Button>
                 )}
                 {viagem.iniciada_em && (
-                  <Button size="sm" disabled={busy} onClick={onEncerrar}>
+                  <Button size="sm" disabled={busy} onClick={() => setEncerrarOpen(true)}>
                     <Flag className="h-4 w-4" /> Encerrar
                   </Button>
                 )}
@@ -123,16 +126,40 @@ export function ViagemDetailPage() {
                   size="sm"
                   variant="destructive"
                   disabled={busy}
-                  onClick={() => {
-                    if (confirm('Cancelar esta viagem? As NFs voltam a ficar disponíveis.'))
-                      cancelar.mutate(viagem.id)
-                  }}
+                  onClick={() => setCancelarOpen(true)}
                 >
                   <XCircle className="h-4 w-4" /> Cancelar
                 </Button>
               </>
             )}
           </div>
+        }
+      />
+
+      {encerrarOpen && (
+        <EncerrarViagemModal
+          open={encerrarOpen}
+          onClose={() => setEncerrarOpen(false)}
+          viagem={viagem}
+        />
+      )}
+      <ConfirmDialog
+        open={cancelarOpen}
+        onClose={() => setCancelarOpen(false)}
+        title="Cancelar viagem"
+        description="Cancelar esta viagem? As NFs voltam a ficar disponíveis para outra viagem."
+        confirmLabel="Cancelar viagem"
+        cancelLabel="Voltar"
+        destructive
+        loading={cancelar.isPending}
+        onConfirm={() =>
+          cancelar.mutate(viagem.id, {
+            onSuccess: () => {
+              toast.success('Viagem cancelada.')
+              setCancelarOpen(false)
+            },
+            onError: () => setCancelarOpen(false),
+          })
         }
       />
 
@@ -195,6 +222,8 @@ export function ViagemDetailPage() {
                     alertas={alertas}
                     paradasDetectadas={trajetoria?.paradas_detectadas}
                     foco={foco}
+                    erroTrajeto={trajetoriaQ.isError}
+                    onTentarNovamente={() => void trajetoriaQ.refetch()}
                   />
                 </Suspense>
               </CardContent>
@@ -226,8 +255,25 @@ export function ViagemDetailPage() {
                   return (
                     <TR
                       key={p.id}
-                      className={coord ? 'cursor-pointer' : undefined}
+                      className={
+                        coord
+                          ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+                          : undefined
+                      }
                       onClick={coord ? () => focar(coord.lng, coord.lat) : undefined}
+                      onKeyDown={
+                        coord
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                focar(coord.lng, coord.lat)
+                              }
+                            }
+                          : undefined
+                      }
+                      tabIndex={coord ? 0 : undefined}
+                      role={coord ? 'button' : undefined}
+                      aria-label={coord ? `Ver no mapa onde a parada ${p.ordem} foi entregue` : undefined}
                       title={coord ? 'Ver no mapa onde foi entregue' : undefined}
                     >
                       <TD className="text-muted-foreground">{p.ordem}</TD>
@@ -251,11 +297,19 @@ export function ViagemDetailPage() {
                             disabled={busy}
                             onClick={(e) => {
                               e.stopPropagation()
-                              marcarParada.mutate({
-                                viagemId: viagem.id,
-                                paradaId: p.id,
-                                status: 'entregue',
-                              })
+                              marcarParada.mutate(
+                                {
+                                  viagemId: viagem.id,
+                                  paradaId: p.id,
+                                  status: 'entregue',
+                                },
+                                {
+                                  onSuccess: () =>
+                                    toast.success(
+                                      `Parada ${p.nf_numero ? `da NF ${p.nf_numero} ` : ''}marcada como entregue.`,
+                                    ),
+                                },
+                              )
                             }}
                           >
                             <CheckCircle2 className="h-4 w-4" /> Entregar
@@ -285,9 +339,23 @@ export function ViagemDetailPage() {
                   <div
                     key={a.id}
                     className={`flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 ${
-                      coord ? 'cursor-pointer transition-colors hover:bg-accent' : ''
+                      coord
+                        ? 'cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                        : ''
                     }`}
                     onClick={coord ? () => focar(coord.lng, coord.lat) : undefined}
+                    onKeyDown={
+                      coord
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              focar(coord.lng, coord.lat)
+                            }
+                          }
+                        : undefined
+                    }
+                    tabIndex={coord ? 0 : undefined}
+                    role={coord ? 'button' : undefined}
                     title={coord ? 'Ver no mapa onde ocorreu' : undefined}
                   >
                     <div className="flex items-center gap-3">

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatCurrency, formatDate } from '@/lib/format'
@@ -95,7 +96,12 @@ export function NfsPage() {
           error={error}
           isEmpty={nfs.length === 0}
           emptyLabel="Nenhuma nota fiscal encontrada."
-          loadingLabel="Carregando notas…"
+          emptyAction={
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="h-4 w-4" /> Importar a primeira NF-e
+            </Button>
+          }
+          skeleton={<TableSkeleton cols={5} />}
         />
 
         {nfs.length > 0 && (

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useMotoristaMutations } from '@/api/hooks'
 import { ApiError } from '@/lib/api'
 import type { Motorista } from '@/types'
@@ -47,6 +48,7 @@ export function MotoristaFormModal({
     try {
       if (editando) await atualizar.mutateAsync({ id: motorista!.id, input })
       else await criar.mutateAsync(input)
+      toast.success(editando ? 'Motorista atualizado.' : 'Motorista cadastrado.')
       onClose()
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao salvar o motorista.')

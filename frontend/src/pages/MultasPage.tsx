@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { ExternalLink, Link2, Plus, Search } from 'lucide-react'
 import { useMultaMutations, useMultas, type MultasFiltro } from '@/api/hooks'
 import { PageHeader } from '@/components/AppLayout'
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import { CriarMultaModal } from './multas/CriarMultaModal'
@@ -108,8 +110,8 @@ export function MultasPage() {
           isLoading={isLoading}
           error={error}
           isEmpty={multas.length === 0}
-          emptyLabel="Nenhuma multa encontrada."
-          loadingLabel="Carregando multas…"
+          emptyLabel="Nenhuma multa encontrada. Boa notícia para a frota."
+          skeleton={<TableSkeleton cols={7} />}
         />
 
         {multas.length > 0 && (
@@ -164,7 +166,17 @@ export function MultasPage() {
                             size="sm"
                             variant="outline"
                             disabled={revincular.isPending}
-                            onClick={() => revincular.mutate(m.id)}
+                            onClick={() =>
+                              revincular.mutate(m.id, {
+                                onSuccess: (r) => {
+                                  if (r.viagem_id) toast.success('Multa vinculada a uma viagem.')
+                                  else
+                                    toast.info(
+                                      'Nenhuma viagem encontrada para o veículo na data da multa.',
+                                    )
+                                },
+                              })
+                            }
                           >
                             <Link2 className="h-4 w-4" /> Revincular
                           </Button>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useMultaMutations, useVeiculos } from '@/api/hooks'
 import { ApiError } from '@/lib/api'
 import { FormField } from '@/components/FormField'
@@ -51,6 +52,7 @@ export function CriarMultaModal({ open, onClose }: { open: boolean; onClose: () 
 
     try {
       await criar.mutateAsync(input)
+      toast.success('Multa lançada.')
       onClose()
     } catch (err) {
       const msg =

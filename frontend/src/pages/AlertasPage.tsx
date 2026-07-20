@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
 
@@ -74,8 +75,8 @@ export function AlertasPage() {
           isLoading={isLoading}
           error={error}
           isEmpty={alertas.length === 0}
-          emptyLabel="Nenhum alerta encontrado."
-          loadingLabel="Carregando alertas…"
+          emptyLabel="Nenhum alerta encontrado. Frota rodando em paz."
+          skeleton={<TableSkeleton cols={5} />}
         />
 
         {alertas.length > 0 && (

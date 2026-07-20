@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import {
   useConsultarVeiculo,
@@ -17,6 +18,8 @@ import { PageHeader } from '@/components/AppLayout'
 import { DataState } from '@/components/DataState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { formatCpf, formatDate } from '@/lib/format'
@@ -102,6 +105,7 @@ function VeiculosTab() {
   const consultar = useConsultarVeiculo()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Veiculo | null>(null)
+  const [excluindo, setExcluindo] = useState<Veiculo | null>(null)
   const [buscandoId, setBuscandoId] = useState<string | null>(null)
   const [aviso, setAviso] = useState<{ tom: 'ok' | 'erro'; texto: string } | null>(null)
 
@@ -112,9 +116,6 @@ function VeiculosTab() {
   const editar = (v: Veiculo) => {
     setEditando(v)
     setModalOpen(true)
-  }
-  const excluir = (v: Veiculo) => {
-    if (confirm(`Excluir o veículo ${v.placa}?`)) remover.mutate(v.id)
   }
 
   const buscarDebitos = (v: Veiculo) => {
@@ -172,7 +173,18 @@ function VeiculosTab() {
       )}
 
       {isLoading || error || !data?.length ? (
-        <DataState isLoading={isLoading} error={error} isEmpty={!data?.length} />
+        <DataState
+          isLoading={isLoading}
+          error={error}
+          isEmpty={!data?.length}
+          skeleton={<TableSkeleton cols={6} />}
+          emptyLabel="Nenhum veículo cadastrado ainda."
+          emptyAction={
+            <Button size="sm" onClick={novo}>
+              <Plus className="h-4 w-4" /> Cadastre seu primeiro veículo
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <THead>
@@ -207,7 +219,7 @@ function VeiculosTab() {
                       <ReceiptText className="h-4 w-4" />
                       {buscandoId === v.id ? 'Buscando…' : 'Buscar débitos'}
                     </Button>
-                    <RowActions onEdit={() => editar(v)} onDelete={() => excluir(v)} />
+                    <RowActions onEdit={() => editar(v)} onDelete={() => setExcluindo(v)} />
                   </div>
                 </TD>
               </TR>
@@ -218,6 +230,25 @@ function VeiculosTab() {
       {modalOpen && (
         <VeiculoFormModal open={modalOpen} onClose={() => setModalOpen(false)} veiculo={editando} />
       )}
+      <ConfirmDialog
+        open={!!excluindo}
+        onClose={() => setExcluindo(null)}
+        title="Excluir veículo"
+        description={`Excluir o veículo ${excluindo?.placa}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        destructive
+        loading={remover.isPending}
+        onConfirm={() =>
+          excluindo &&
+          remover.mutate(excluindo.id, {
+            onSuccess: () => {
+              toast.success(`Veículo ${excluindo.placa} excluído.`)
+              setExcluindo(null)
+            },
+            onError: () => setExcluindo(null),
+          })
+        }
+      />
     </div>
   )
 }
@@ -227,20 +258,29 @@ function MotoristasTab() {
   const { remover } = useMotoristaMutations()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Motorista | null>(null)
+  const [excluindo, setExcluindo] = useState<Motorista | null>(null)
 
   const novo = () => {
     setEditando(null)
     setModalOpen(true)
-  }
-  const excluir = (m: Motorista) => {
-    if (confirm(`Excluir o motorista ${m.nome}?`)) remover.mutate(m.id)
   }
 
   return (
     <div className="space-y-3">
       <TabToolbar label="Novo motorista" onNew={novo} />
       {isLoading || error || !data?.length ? (
-        <DataState isLoading={isLoading} error={error} isEmpty={!data?.length} />
+        <DataState
+          isLoading={isLoading}
+          error={error}
+          isEmpty={!data?.length}
+          skeleton={<TableSkeleton cols={7} />}
+          emptyLabel="Nenhum motorista cadastrado ainda."
+          emptyAction={
+            <Button size="sm" onClick={novo}>
+              <Plus className="h-4 w-4" /> Cadastre seu primeiro motorista
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <THead>
@@ -277,7 +317,7 @@ function MotoristasTab() {
                       setEditando(m)
                       setModalOpen(true)
                     }}
-                    onDelete={() => excluir(m)}
+                    onDelete={() => setExcluindo(m)}
                   />
                 </TD>
               </TR>
@@ -292,6 +332,25 @@ function MotoristasTab() {
           motorista={editando}
         />
       )}
+      <ConfirmDialog
+        open={!!excluindo}
+        onClose={() => setExcluindo(null)}
+        title="Excluir motorista"
+        description={`Excluir o motorista ${excluindo?.nome}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        destructive
+        loading={remover.isPending}
+        onConfirm={() =>
+          excluindo &&
+          remover.mutate(excluindo.id, {
+            onSuccess: () => {
+              toast.success(`Motorista ${excluindo.nome} excluído.`)
+              setExcluindo(null)
+            },
+            onError: () => setExcluindo(null),
+          })
+        }
+      />
     </div>
   )
 }
@@ -301,22 +360,29 @@ function UnidadesTab() {
   const { remover } = useUnidadeMutations()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Unidade | null>(null)
+  const [excluindo, setExcluindo] = useState<Unidade | null>(null)
 
-  const excluir = (u: Unidade) => {
-    if (confirm(`Excluir a unidade ${u.nome}?`)) remover.mutate(u.id)
+  const nova = () => {
+    setEditando(null)
+    setModalOpen(true)
   }
 
   return (
     <div className="space-y-3">
-      <TabToolbar
-        label="Nova unidade"
-        onNew={() => {
-          setEditando(null)
-          setModalOpen(true)
-        }}
-      />
+      <TabToolbar label="Nova unidade" onNew={nova} />
       {isLoading || error || !data?.length ? (
-        <DataState isLoading={isLoading} error={error} isEmpty={!data?.length} />
+        <DataState
+          isLoading={isLoading}
+          error={error}
+          isEmpty={!data?.length}
+          skeleton={<TableSkeleton cols={5} />}
+          emptyLabel="Nenhuma unidade cadastrada ainda."
+          emptyAction={
+            <Button size="sm" onClick={nova}>
+              <Plus className="h-4 w-4" /> Cadastre sua primeira unidade
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <THead>
@@ -343,7 +409,7 @@ function UnidadesTab() {
                       setEditando(u)
                       setModalOpen(true)
                     }}
-                    onDelete={() => excluir(u)}
+                    onDelete={() => setExcluindo(u)}
                   />
                 </TD>
               </TR>
@@ -354,6 +420,25 @@ function UnidadesTab() {
       {modalOpen && (
         <UnidadeFormModal open={modalOpen} onClose={() => setModalOpen(false)} unidade={editando} />
       )}
+      <ConfirmDialog
+        open={!!excluindo}
+        onClose={() => setExcluindo(null)}
+        title="Excluir unidade"
+        description={`Excluir a unidade ${excluindo?.nome}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        destructive
+        loading={remover.isPending}
+        onConfirm={() =>
+          excluindo &&
+          remover.mutate(excluindo.id, {
+            onSuccess: () => {
+              toast.success(`Unidade ${excluindo.nome} excluída.`)
+              setExcluindo(null)
+            },
+            onError: () => setExcluindo(null),
+          })
+        }
+      />
     </div>
   )
 }
@@ -363,22 +448,29 @@ function RotasTab() {
   const { remover } = useRotaMutations()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Rota | null>(null)
+  const [excluindo, setExcluindo] = useState<Rota | null>(null)
 
-  const excluir = (r: Rota) => {
-    if (confirm(`Excluir a rota ${r.nome ?? r.id}?`)) remover.mutate(r.id)
+  const nova = () => {
+    setEditando(null)
+    setModalOpen(true)
   }
 
   return (
     <div className="space-y-3">
-      <TabToolbar
-        label="Nova rota"
-        onNew={() => {
-          setEditando(null)
-          setModalOpen(true)
-        }}
-      />
+      <TabToolbar label="Nova rota" onNew={nova} />
       {isLoading || error || !data?.length ? (
-        <DataState isLoading={isLoading} error={error} isEmpty={!data?.length} />
+        <DataState
+          isLoading={isLoading}
+          error={error}
+          isEmpty={!data?.length}
+          skeleton={<TableSkeleton cols={7} />}
+          emptyLabel="Nenhuma rota planejada ainda."
+          emptyAction={
+            <Button size="sm" onClick={nova}>
+              <Plus className="h-4 w-4" /> Cadastre sua primeira rota
+            </Button>
+          }
+        />
       ) : (
         <Table>
           <THead>
@@ -407,7 +499,7 @@ function RotasTab() {
                       setEditando(r)
                       setModalOpen(true)
                     }}
-                    onDelete={() => excluir(r)}
+                    onDelete={() => setExcluindo(r)}
                   />
                 </TD>
               </TR>
@@ -418,6 +510,25 @@ function RotasTab() {
       {modalOpen && (
         <RotaFormModal open={modalOpen} onClose={() => setModalOpen(false)} rota={editando} />
       )}
+      <ConfirmDialog
+        open={!!excluindo}
+        onClose={() => setExcluindo(null)}
+        title="Excluir rota"
+        description={`Excluir a rota ${excluindo?.nome ?? ''}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        destructive
+        loading={remover.isPending}
+        onConfirm={() =>
+          excluindo &&
+          remover.mutate(excluindo.id, {
+            onSuccess: () => {
+              toast.success('Rota excluída.')
+              setExcluindo(null)
+            },
+            onError: () => setExcluindo(null),
+          })
+        }
+      />
     </div>
   )
 }

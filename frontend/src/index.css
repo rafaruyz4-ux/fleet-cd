@@ -115,6 +115,37 @@ body {
   background-attachment: fixed;
 }
 
+/* Shimmer dos skeletons de carregamento (varredura clara sobre o tom muted). */
+.skeleton-shimmer {
+  background: linear-gradient(
+    100deg,
+    hsl(217 33% 14%) 40%,
+    hsl(213 32% 21%) 50%,
+    hsl(217 33% 14%) 60%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
+}
+@keyframes skeleton-sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+/* Toasts (sonner) no tema Nexus: vidro escuro + detalhes em ciano/vermelho. */
+[data-sonner-toast] [data-icon] {
+  color: var(--primary);
+}
+[data-sonner-toast][data-type='error'] [data-icon] {
+  color: var(--destructive);
+}
+[data-sonner-toast][data-type='warning'] [data-icon] {
+  color: var(--warning);
+}
+
 /* Títulos na fonte de marca (Space Grotesk), levemente condensada. */
 h1,
 h2,

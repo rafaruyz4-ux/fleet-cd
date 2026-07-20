@@ -43,6 +43,7 @@ export function useCriarEmpresa() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CriarEmpresaInput) => api.post<EmpresaCriada>('/admin/empresas', input),
+    meta: { erroLocal: true }, // erro tratado inline no NovaEmpresaModal
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-empresas'] }),
   })
 }
@@ -67,6 +68,7 @@ export function useAtualizarEmpresa() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: AtualizarEmpresaInput }) =>
       api.patch<EmpresaDetalhe>(`/admin/empresas/${id}`, input),
+    meta: { erroLocal: true }, // erro tratado inline no EmpresaDetalheModal
     onSuccess: (emp) => {
       qc.invalidateQueries({ queryKey: ['admin-empresas'] })
       qc.invalidateQueries({ queryKey: ['admin-empresa', emp.id] })
@@ -86,6 +88,7 @@ export function useRedefinirSenha() {
       senha: string
     }) =>
       api.post<{ ok: boolean }>(`/admin/empresas/${empresaId}/usuarios/${usuarioId}/senha`, { senha }),
+    meta: { erroLocal: true }, // erro tratado inline no formulário de senha
   })
 }
 
@@ -104,6 +107,7 @@ export function useMudarPlano() {
   return useMutation({
     mutationFn: (faixa: PlanoFaixa) =>
       api.post<AssinaturaPublica>('/assinatura/plano', { faixa }),
+    meta: { erroLocal: true }, // erro tratado inline na AssinaturaPage
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['assinatura'] })
       // O limite de consultas e a trava de veículos dependem do plano.
@@ -189,6 +193,7 @@ export function useViagemMutations() {
   return {
     criar: useMutation({
       mutationFn: (input: CreateViagemInput) => api.post<Viagem>('/viagens', input),
+      meta: { erroLocal: true }, // erro tratado inline no CriarViagemModal
       onSuccess: () => invalidate(),
     }),
     iniciar: useMutation({
@@ -198,6 +203,7 @@ export function useViagemMutations() {
     encerrar: useMutation({
       mutationFn: ({ id, km_final }: { id: string; km_final?: number }) =>
         api.post<Viagem>(`/viagens/${id}/encerrar`, km_final != null ? { km_final } : {}),
+      meta: { erroLocal: true }, // erro tratado inline no EncerrarViagemModal
       onSuccess: (v) => invalidate(v.id),
     }),
     cancelar: useMutation({
@@ -285,6 +291,7 @@ export function useMultaMutations() {
   return {
     criar: useMutation({
       mutationFn: (input: Record<string, unknown>) => api.post<Multa>('/multas', input),
+      meta: { erroLocal: true }, // erro tratado inline no CriarMultaModal
       onSuccess: invalidate,
     }),
     revincular: useMutation({
@@ -338,6 +345,7 @@ export function useConsultarVeiculo() {
   return useMutation({
     mutationFn: (veiculoId: string) =>
       api.post<ResultadoConsulta>(`/consultas/veiculo/${veiculoId}`, {}),
+    meta: { erroLocal: true }, // erro tratado no aviso inline da aba Veículos
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['consultas-consumo'] })
       qc.invalidateQueries({ queryKey: ['multas'] })
@@ -370,6 +378,7 @@ export function useImportarNfe() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (xml: string) => api.post<NotaFiscal>('/nfs/importar', { xml }),
+    meta: { erroLocal: true }, // erro tratado inline no painel de importação
     onSuccess: () => qc.invalidateQueries({ queryKey: ['nfs'] }),
   })
 }
@@ -411,11 +420,13 @@ function useCrud<T>(key: string) {
   return {
     criar: useMutation({
       mutationFn: (input: Record<string, unknown>) => api.post<T>(`/${key}`, input),
+      meta: { erroLocal: true }, // erro tratado inline no modal do formulário
       onSuccess: invalidate,
     }),
     atualizar: useMutation({
       mutationFn: ({ id, input }: { id: string; input: Record<string, unknown> }) =>
         api.patch<T>(`/${key}/${id}`, input),
+      meta: { erroLocal: true }, // erro tratado inline no modal do formulário
       onSuccess: invalidate,
     }),
     remover: useMutation({

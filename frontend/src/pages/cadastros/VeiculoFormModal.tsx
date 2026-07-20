@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useVeiculoMutations } from '@/api/hooks'
 import { ApiError } from '@/lib/api'
 import type { Veiculo } from '@/types'
@@ -45,6 +46,7 @@ export function VeiculoFormModal({
     try {
       if (editando) await atualizar.mutateAsync({ id: veiculo!.id, input })
       else await criar.mutateAsync(input)
+      toast.success(editando ? 'Veículo atualizado.' : 'Veículo cadastrado.')
       onClose()
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao salvar o veículo.')

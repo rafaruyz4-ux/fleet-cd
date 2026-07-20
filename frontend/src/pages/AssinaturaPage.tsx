@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Check, CreditCard, Sparkles, Zap } from 'lucide-react'
 import { useAssinatura, useConsumoConsultas, useMudarPlano } from '@/api/hooks'
 import { PageHeader } from '@/components/AppLayout'
@@ -47,6 +48,7 @@ export function AssinaturaPage() {
     setFaixaAlvo(faixa)
     try {
       await mudarPlano.mutateAsync(faixa)
+      toast.success(`Plano alterado para ${PLANOS_UI[faixa].nome}.`)
     } catch (err) {
       setErroTroca(
         err instanceof ApiError ? err.message : 'Não foi possível trocar de plano. Tente de novo.',
