@@ -129,10 +129,20 @@ export interface PontoTrajeto {
   recebido_em: string
 }
 
+/** Parada automática detectada pelo backend (cluster parado 5+ min). */
+export interface ParadaDetectada {
+  lat: number
+  lng: number
+  inicio: string
+  fim: string
+  duracao_min: number
+}
+
 export interface Trajetoria {
   viagem_id: string
   total: number
   pontos: PontoTrajeto[]
+  paradas_detectadas: ParadaDetectada[]
 }
 
 /** Trajeto encaixado nas ruas (map matching); 'gps' = plano B (linha bruta). */

@@ -49,6 +49,7 @@ export default tseslint.config(
         navigator: 'readonly',
         localStorage: 'readonly',
         fetch: 'readonly',
+        Blob: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',

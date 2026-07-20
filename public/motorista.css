@@ -221,6 +221,21 @@ button:disabled {
   color: #4ade80;
 }
 
+/* Sessão expirada: vermelho e clicável (toque leva ao re-login). */
+.status.expirada {
+  background: rgba(220, 38, 38, 0.18);
+  color: #f87171;
+  cursor: pointer;
+}
+
+/* Aviso discreto (ex.: Wake Lock indisponível). */
+.aviso {
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: -6px 0 14px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

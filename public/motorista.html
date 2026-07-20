@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0f172a" />
     <title>Rastreio do Motorista — Frota CD</title>
     <link rel="stylesheet" href="/motorista.css" />
@@ -33,7 +33,7 @@
         </div>
         <p class="muted" id="viagens-vazio" hidden>
           Nenhuma viagem. Crie uma no dashboard e clique em <b>Iniciar</b> (status
-          <b>em_andamento</b>) para poder enviar GPS.
+          <b>Em andamento</b>) para poder enviar GPS.
         </p>
         <ul id="lista-viagens" class="lista"></ul>
         <button id="btn-sair" class="link danger">Sair</button>
@@ -45,6 +45,10 @@
         <h2 id="track-titulo">Viagem</h2>
 
         <div class="status" id="track-status">Parado</div>
+        <p class="aviso" id="wake-aviso" hidden>
+          Mantenha a tela ligada durante a viagem — este navegador não deixa o app
+          segurar a tela sozinho.
+        </p>
 
         <div class="grid">
           <div class="metric"><span>Enviadas</span><b id="m-enviadas">0</b></div>

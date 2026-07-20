@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
+import { formatDuracaoMin, haversineM } from '@/lib/geo'
 
 // Lazy: o MapLibre (~pesado) só é baixado ao abrir o detalhe de uma viagem.
 const TripMap = lazy(() =>
@@ -65,6 +66,13 @@ export function ViagemDetailPage() {
     }
     return m
   }, [viagem?.paradas, trajetoria?.pontos])
+
+  // Estatísticas reais do GPS: km rodado, tempo em movimento × parado e
+  // velocidades (média em movimento / máxima).
+  const stats = useMemo(
+    () => estatisticasGps(trajetoria?.pontos ?? [], trajetoria?.paradas_detectadas ?? []),
+    [trajetoria],
+  )
 
   if (isLoading || error || !viagem) {
     return (
@@ -150,6 +158,25 @@ export function ViagemDetailPage() {
               <Info label="Km inicial" value={viagem.km_inicial?.toString() ?? '—'} />
               <Info label="Km final" value={viagem.km_final?.toString() ?? '—'} />
               <Info label="Rota planejada" value={rota?.nome ?? (viagem.rota_planejada_id ? 'Sem nome' : 'Nenhuma')} />
+              {stats && (
+                <>
+                  <p className="border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Telemetria (GPS)
+                  </p>
+                  <Info label="Km rodado (GPS)" value={`${stats.km.toFixed(1)} km`} />
+                  <Info label="Tempo em movimento" value={formatDuracaoMin(stats.movimentoMin)} />
+                  <Info
+                    label="Tempo parado"
+                    value={`${formatDuracaoMin(stats.paradoMin)}${
+                      stats.paradas > 0 ? ` (${stats.paradas} parada${stats.paradas > 1 ? 's' : ''})` : ''
+                    }`}
+                  />
+                  <Info
+                    label="Vel. média / máxima"
+                    value={`${Math.round(stats.velMedia)} / ${Math.round(stats.velMax)} km/h`}
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -166,6 +193,7 @@ export function ViagemDetailPage() {
                     linhaRuas={trajetoRuas?.linha}
                     rota={rota?.linha}
                     alertas={alertas}
+                    paradasDetectadas={trajetoria?.paradas_detectadas}
                     foco={foco}
                   />
                 </Suspense>
@@ -283,6 +311,46 @@ export function ViagemDetailPage() {
       </div>
     </div>
   )
+}
+
+// Estatísticas calculadas dos pontos brutos do GPS (mostradas no Resumo).
+function estatisticasGps(
+  pontos: PontoTrajeto[],
+  paradasDetectadas: { duracao_min: number }[],
+): {
+  km: number
+  movimentoMin: number
+  paradoMin: number
+  paradas: number
+  velMedia: number
+  velMax: number
+} | null {
+  if (pontos.length < 2) return null
+  let metros = 0
+  let velMax = 0
+  for (let i = 1; i < pontos.length; i++) {
+    const d = haversineM(pontos[i - 1]!, pontos[i]!)
+    metros += d
+    const dtS =
+      (new Date(pontos[i]!.registrado_em).getTime() -
+        new Date(pontos[i - 1]!.registrado_em).getTime()) /
+      1000
+    // Velocidade do trecho: a reportada pelo GPS; senão a implícita.
+    const v = pontos[i]!.velocidade_kmh ?? (dtS > 0 ? (d / dtS) * 3.6 : 0)
+    if (v > velMax) velMax = v
+  }
+  const km = metros / 1000
+  const totalMin =
+    (new Date(pontos[pontos.length - 1]!.registrado_em).getTime() -
+      new Date(pontos[0]!.registrado_em).getTime()) /
+    60000
+  const paradoMin = Math.min(
+    totalMin,
+    paradasDetectadas.reduce((s, p) => s + p.duracao_min, 0),
+  )
+  const movimentoMin = Math.max(0, totalMin - paradoMin)
+  const velMedia = movimentoMin > 0 ? km / (movimentoMin / 60) : 0
+  return { km, movimentoMin, paradoMin, paradas: paradasDetectadas.length, velMedia, velMax }
 }
 
 // Acha o ponto de GPS mais próximo de um horário (até 30 min de diferença).

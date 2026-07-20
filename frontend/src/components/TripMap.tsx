@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react'
-import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
-import type { Alerta, LatLng, PontoTrajeto } from '@/types'
+import { useEffect, useRef, useState } from 'react'
+import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from 'maplibre-gl'
+import { Crosshair, Route } from 'lucide-react'
+import type { Alerta, LatLng, ParadaDetectada, PontoTrajeto } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatHora, haversineM } from '@/lib/geo'
 import { BASE_MAP_STYLE, DEFAULT_CENTER } from '@/lib/map-style'
 
 /** Ponto para o qual o mapa deve "voar" (zoom). nonce força repetir o voo. */
@@ -17,6 +19,8 @@ interface TripMapProps {
   linhaRuas?: LatLng[] | null
   rota?: LatLng[] | null
   alertas?: Alerta[]
+  /** Paradas automáticas detectadas pelo backend (clusters de 5+ min). */
+  paradasDetectadas?: ParadaDetectada[]
   foco?: FocoMapa | null
   className?: string
 }
@@ -26,6 +30,70 @@ const ALERTA_COR: Record<string, string> = {
   desvio_rota: '#fb923c',
   parada_longa: '#fbbf24',
   sem_gps: '#94a3b8',
+}
+
+// ---- Cor por velocidade (C2) ----
+const COR_VEL_BAIXA = '#22c55e' // até 60 km/h
+const COR_VEL_MEDIA = '#eab308' // 60–90 km/h
+const COR_VEL_ALTA = '#ef4444' // acima de 90 km/h
+
+function corDaVelocidade(kmh: number): string {
+  if (kmh > 90) return COR_VEL_ALTA
+  if (kmh > 60) return COR_VEL_MEDIA
+  return COR_VEL_BAIXA
+}
+
+// Teto de pontos usados para montar o gradiente (viagens longas → amostra).
+const MAX_PONTOS_GRADIENTE = 500
+
+/**
+ * Expressão de `line-gradient` que pinta o trajeto por velocidade: cada ponto
+ * vira um "stop" na fração da distância acumulada. Como o line-progress do
+ * MapLibre também é por distância, as cores caem no lugar certo — inclusive
+ * na linha encaixada nas ruas (mesmo caminho ≈ mesmas frações).
+ */
+function gradientePorVelocidade(todos: PontoTrajeto[]): ExpressionSpecification {
+  const constante = (cor: string): ExpressionSpecification =>
+    ['interpolate', ['linear'], ['line-progress'], 0, cor, 1, cor] as ExpressionSpecification
+
+  const passo = Math.max(1, Math.ceil(todos.length / MAX_PONTOS_GRADIENTE))
+  const pontos = passo > 1 ? todos.filter((_, i) => i % passo === 0) : todos
+  if (pontos.length < 2) return constante(COR_VEL_BAIXA)
+
+  // Distância acumulada até cada ponto (fração de line-progress).
+  const acumulada: number[] = [0]
+  let total = 0
+  for (let i = 1; i < pontos.length; i++) {
+    total += haversineM(pontos[i - 1]!, pontos[i]!)
+    acumulada.push(total)
+  }
+  if (total <= 0) return constante(COR_VEL_BAIXA)
+
+  // Cor de cada trecho: velocidade reportada no fim do trecho; senão a implícita.
+  const cores: string[] = []
+  for (let i = 1; i < pontos.length; i++) {
+    const dtS =
+      (new Date(pontos[i]!.registrado_em).getTime() -
+        new Date(pontos[i - 1]!.registrado_em).getTime()) /
+      1000
+    const distM = acumulada[i]! - acumulada[i - 1]!
+    const kmh = pontos[i]!.velocidade_kmh ?? (dtS > 0 ? (distM / dtS) * 3.6 : 0)
+    cores.push(corDaVelocidade(kmh))
+  }
+
+  // Um stop por mudança de cor (frações estritamente crescentes).
+  const expr: (string | number | unknown[])[] = ['step', ['line-progress'], cores[0]!]
+  let ultimaCor = cores[0]!
+  let ultimaFrac = 0
+  for (let i = 1; i < cores.length; i++) {
+    if (cores[i] === ultimaCor) continue
+    const frac = Math.min(1, Math.max(ultimaFrac + 1e-6, acumulada[i]! / total))
+    expr.push(frac, cores[i]!)
+    ultimaCor = cores[i]!
+    ultimaFrac = frac
+  }
+  if (expr.length === 3) return constante(ultimaCor)
+  return expr as unknown as ExpressionSpecification
 }
 
 type FC = GeoJSON.FeatureCollection
@@ -73,19 +141,47 @@ function elFoco(): HTMLElement {
   return el
 }
 
+// Parada automática detectada: ícone de "pausa" (duas barras).
+function elParadaDetectada(): HTMLElement {
+  const el = document.createElement('div')
+  el.className =
+    'flex h-5 w-5 items-center justify-center gap-[3px] rounded-full bg-slate-200 shadow-md ring-2 ring-slate-900'
+  el.innerHTML =
+    '<span class="h-2 w-[3px] rounded-sm bg-slate-900"></span>' +
+    '<span class="h-2 w-[3px] rounded-sm bg-slate-900"></span>'
+  return el
+}
+
 /**
  * Mapa de uma viagem (tema escuro "central de controle"): basemap dark,
- * trajetória GPS com brilho + gradiente ciano→azul, rota planejada tracejada,
- * marcadores de início/posição-atual (pulsando), pinos de alerta, legenda, e
- * "voo" até um ponto quando `foco` muda (clique em alerta/parada).
+ * trajetória GPS colorida por velocidade (verde/amarelo/vermelho), opção de
+ * "seguir ruas" (map matching), rota planejada tracejada, marcadores de
+ * início/posição-atual (pulsando), pinos de alerta, paradas detectadas,
+ * legenda, botão de recentralizar e "voo" até um ponto quando `foco` muda.
  */
-export function TripMap({ pontos, linhaRuas, rota, alertas, foco, className }: TripMapProps) {
+export function TripMap({
+  pontos,
+  linhaRuas,
+  rota,
+  alertas,
+  paradasDetectadas,
+  foco,
+  className,
+}: TripMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const loadedRef = useRef(false)
   const markersRef = useRef<maplibregl.Marker[]>([])
   const focoMarkerRef = useRef<maplibregl.Marker | null>(null)
   const resizeObsRef = useRef<ResizeObserver | null>(null)
+  // Enquadra o trajeto só no PRIMEIRO desenho: os polls seguintes não podem
+  // "roubar" o pan/zoom de quem está explorando o mapa.
+  const enquadrouRef = useRef(false)
+  // Reexecuta o enquadramento sob demanda (botão "recentralizar").
+  const recentrarRef = useRef<(() => void) | null>(null)
+  // "Seguir ruas": desenha a linha encaixada no asfalto quando disponível.
+  const [seguirRuas, setSeguirRuas] = useState(true)
+  const temRuas = !!linhaRuas && linhaRuas.length >= 2
 
   // Inicializa o mapa uma única vez.
   useEffect(() => {
@@ -161,6 +257,7 @@ export function TripMap({ pontos, linhaRuas, rota, alertas, foco, className }: T
       map.remove()
       mapRef.current = null
       loadedRef.current = false
+      enquadrouRef.current = false
     }
   }, [])
 
@@ -172,15 +269,20 @@ export function TripMap({ pontos, linhaRuas, rota, alertas, foco, className }: T
     const render = () => {
       // Pontos brutos do GPS (para marcadores início/atual).
       const trajetoCoords = pontos.map((p) => [p.lng, p.lat] as [number, number])
-      // Linha desenhada: prioriza a versão encaixada nas ruas; senão liga os pontos.
+      // Linha desenhada: a versão encaixada nas ruas quando disponível E o
+      // toggle "Seguir ruas" estiver ligado; senão liga os pontos brutos.
       const linhaCoords =
-        linhaRuas && linhaRuas.length >= 2
-          ? linhaRuas.map((p) => [p.lng, p.lat] as [number, number])
+        temRuas && seguirRuas
+          ? linhaRuas!.map((p) => [p.lng, p.lat] as [number, number])
           : trajetoCoords
       const rotaCoords = (rota ?? []).map((p) => [p.lng, p.lat] as [number, number])
 
       ;(map.getSource('trajeto') as GeoJSONSource | undefined)?.setData(lineFC(linhaCoords))
       ;(map.getSource('rota') as GeoJSONSource | undefined)?.setData(lineFC(rotaCoords))
+      // Pinta o trajeto por velocidade (verde ≤60 · amarelo 60–90 · vermelho >90).
+      if (map.getLayer('trajeto')) {
+        map.setPaintProperty('trajeto', 'line-gradient', gradientePorVelocidade(pontos))
+      }
 
       markersRef.current.forEach((m) => m.remove())
       markersRef.current = []
@@ -211,22 +313,40 @@ export function TripMap({ pontos, linhaRuas, rota, alertas, foco, className }: T
         }
       }
 
-      // Enquadra todos os pontos relevantes.
-      const all = [...linhaCoords, ...rotaCoords]
-      if (all.length === 1) {
-        map.easeTo({ center: all[0]!, zoom: 14 })
-      } else if (all.length > 1) {
-        const bounds = all.reduce(
-          (b, c) => b.extend(c),
-          new maplibregl.LngLatBounds(all[0]!, all[0]!),
+      // Paradas automáticas detectadas (ícone de pausa).
+      for (const p of paradasDetectadas ?? []) {
+        addMarker(
+          p.lng,
+          p.lat,
+          elParadaDetectada(),
+          `Parado ${p.duracao_min}min (${formatHora(p.inicio)}–${formatHora(p.fim)})`,
         )
-        map.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 500 })
+      }
+
+      // Enquadra todos os pontos relevantes — só no primeiro desenho ou pelo
+      // botão "recentralizar"; os refetches não mexem no pan/zoom do usuário.
+      const all = [...linhaCoords, ...rotaCoords]
+      const enquadrar = () => {
+        if (all.length === 1) {
+          map.easeTo({ center: all[0]!, zoom: 14 })
+        } else if (all.length > 1) {
+          const bounds = all.reduce(
+            (b, c) => b.extend(c),
+            new maplibregl.LngLatBounds(all[0]!, all[0]!),
+          )
+          map.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 500 })
+        }
+      }
+      recentrarRef.current = enquadrar
+      if (!enquadrouRef.current && all.length > 0) {
+        enquadrar()
+        enquadrouRef.current = true
       }
     }
 
     if (loadedRef.current) render()
     else map.once('fleet:ready', render)
-  }, [pontos, linhaRuas, rota, alertas])
+  }, [pontos, linhaRuas, rota, alertas, paradasDetectadas, seguirRuas, temRuas])
 
   // "Voa" até um ponto quando `foco` muda (clique em alerta/parada).
   useEffect(() => {
@@ -255,6 +375,36 @@ export function TripMap({ pontos, linhaRuas, rota, alertas, foco, className }: T
           </div>
         </div>
       )}
+
+      {/* Controles do trajeto (canto superior esquerdo) */}
+      <div className="absolute left-3 top-3 z-10 flex flex-col gap-1.5">
+        {temRuas && (
+          <button
+            type="button"
+            onClick={() => setSeguirRuas((v) => !v)}
+            title={seguirRuas ? 'Mostrando o trajeto encaixado nas ruas' : 'Mostrando a linha crua do GPS'}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors',
+              seguirRuas
+                ? 'border-cyan-400/40 bg-cyan-500/20 text-cyan-300'
+                : 'border-white/10 bg-slate-900/85 text-slate-300 hover:text-slate-100',
+            )}
+          >
+            <Route className="h-3.5 w-3.5" /> Seguir ruas
+          </button>
+        )}
+        {!semTrajeto && (
+          <button
+            type="button"
+            onClick={() => recentrarRef.current?.()}
+            title="Recentralizar o mapa no trajeto"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-300 shadow-md backdrop-blur transition-colors hover:text-slate-100"
+          >
+            <Crosshair className="h-3.5 w-3.5" /> Recentralizar
+          </button>
+        )}
+      </div>
+
       <MapaLegenda />
     </div>
   )
@@ -266,8 +416,12 @@ function MapaLegenda() {
     <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border border-white/10 bg-slate-900/85 px-3 py-2 text-xs text-slate-200 shadow-lg backdrop-blur">
       <ul className="space-y-1">
         <li className="flex items-center gap-2">
-          <span className="h-1 w-4 rounded-full bg-cyan-400" />
-          Trajeto percorrido
+          <span className="flex w-4 overflow-hidden rounded-full">
+            <span className="h-1 w-1/3 bg-green-500" />
+            <span className="h-1 w-1/3 bg-yellow-500" />
+            <span className="h-1 w-1/3 bg-red-500" />
+          </span>
+          Velocidade ≤60 · 60–90 · &gt;90 km/h
         </li>
         <li className="flex items-center gap-2">
           <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-slate-400" />
@@ -284,6 +438,13 @@ function MapaLegenda() {
         <li className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900" />
           Alerta / ponto focado
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="flex h-2.5 w-2.5 items-center justify-center gap-[1.5px] rounded-full bg-slate-200 ring-2 ring-slate-900">
+            <span className="h-1 w-[1.5px] bg-slate-900" />
+            <span className="h-1 w-[1.5px] bg-slate-900" />
+          </span>
+          Parada detectada
         </li>
       </ul>
     </div>

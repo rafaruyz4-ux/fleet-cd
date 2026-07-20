@@ -8,6 +8,16 @@
 (function () {
   var FLUSH_MS = 8000; // envia o buffer a cada 8s
   var MAX_BUFFER = 25; // ...ou antes, se acumular muitos pontos
+  var BUF_KEY = 'mot_buf'; // buffer pendente persistido (sobrevive a fechar a aba)
+  var MIN_DIST_M = 15; // economia de bateria: descarta ponto muito perto...
+  var MIN_INTERVALO_MS = 5000; // ...E muito recente em relação ao anterior
+
+  // Status da viagem → rótulo legível pro motorista.
+  var STATUS_LABEL = {
+    em_andamento: 'Em andamento',
+    encerrada: 'Encerrada',
+    cancelada: 'Cancelada',
+  };
 
   var state = {
     accessToken: null,
@@ -19,7 +29,22 @@
     enviadas: 0,
     alertas: 0,
     flushing: false,
+    wakeLock: null, // sentinela do Wake Lock (tela ligada)
+    sessaoExpirada: false, // true = parar de enviar e pedir re-login
+    ultimoPonto: null, // último ponto ACEITO (filtro de economia)
   };
+
+  // Distância aproximada em metros entre dois pontos (haversine).
+  function distanciaM(a, b) {
+    var R = 6371000;
+    var rad = Math.PI / 180;
+    var dLat = (b.lat - a.lat) * rad;
+    var dLng = (b.lng - a.lng) * rad;
+    var h =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(a.lat * rad) * Math.cos(b.lat * rad);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
 
   // --- elementos ---
   function $(id) {
@@ -81,6 +106,62 @@
     } catch {
       /* localStorage pode falhar (modo privado/quota) — seguir sem persistir */
     }
+  }
+
+  // --- buffer persistido: pontos não enviados sobrevivem a fechar/matar a aba ---
+  function saveBuffer() {
+    try {
+      if (state.viagem && state.buffer.length > 0) {
+        localStorage.setItem(
+          BUF_KEY,
+          JSON.stringify({ viagemId: state.viagem.id, pontos: state.buffer }),
+        );
+      } else {
+        localStorage.removeItem(BUF_KEY);
+      }
+    } catch {
+      /* localStorage pode falhar — seguir sem persistir */
+    }
+  }
+  function loadBufferSalvo() {
+    try {
+      var raw = localStorage.getItem(BUF_KEY);
+      var salvo = raw ? JSON.parse(raw) : null;
+      return salvo && salvo.viagemId && Array.isArray(salvo.pontos) && salvo.pontos.length > 0
+        ? salvo
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // --- Wake Lock: mantém a tela ligada enquanto rastreia ---
+  function pedirWakeLock() {
+    if (!('wakeLock' in navigator)) {
+      $('wake-aviso').hidden = false; // navegador sem Wake Lock → orienta o motorista
+      return;
+    }
+    navigator.wakeLock
+      .request('screen')
+      .then(function (wl) {
+        state.wakeLock = wl;
+        $('wake-aviso').hidden = true;
+        wl.addEventListener('release', function () {
+          state.wakeLock = null; // re-adquirido no próximo visibilitychange
+        });
+      })
+      .catch(function () {
+        $('wake-aviso').hidden = false; // negado (ex.: economia de bateria)
+      });
+  }
+  function soltarWakeLock() {
+    if (state.wakeLock) {
+      state.wakeLock.release().catch(function () {
+        /* já liberado */
+      });
+      state.wakeLock = null;
+    }
+    $('wake-aviso').hidden = true;
   }
 
   // --- API helper com refresh automático (1x) em 401 ---
@@ -154,6 +235,16 @@
       .then(function (data) {
         saveTokens(data.accessToken, data.refreshToken);
         $('senha').value = '';
+        // Se a sessão expirou no meio do rastreio, volta direto pra viagem
+        // (o buffer foi preservado) e retoma o envio.
+        if (state.sessaoExpirada && state.viagem) {
+          state.sessaoExpirada = false;
+          setTrackingUI(state.watchId != null);
+          show('track');
+          logLine('sessão renovada — retomando envio', 'ok');
+          flush();
+          return;
+        }
         loadViagens();
       })
       .catch(function (e) {
@@ -184,7 +275,20 @@
         return res.json();
       })
       .then(function (viagens) {
-        renderViagens(viagens || []);
+        viagens = viagens || [];
+        // Havia pontos pendentes de uma viagem em andamento? Volta direto
+        // pra ela e envia o que ficou pra trás (aba fechada/morta).
+        var salvo = loadBufferSalvo();
+        if (salvo) {
+          var pendente = viagens.find(function (v) {
+            return v.id === salvo.viagemId && v.status === 'em_andamento';
+          });
+          if (pendente) {
+            selecionarViagem(pendente);
+            return;
+          }
+        }
+        renderViagens(viagens);
         show('viagens');
       })
       .catch(function (e) {
@@ -207,7 +311,7 @@
 
       var badge = document.createElement('span');
       badge.className = 'badge ' + (emAndamento ? 'em_andamento' : 'outro');
-      badge.textContent = v.status;
+      badge.textContent = STATUS_LABEL[v.status] || v.status;
       placa.appendChild(document.createTextNode(' '));
       placa.appendChild(badge);
 
@@ -229,7 +333,7 @@
         });
       } else {
         li.style.opacity = '0.55';
-        li.title = 'Só viagens em_andamento aceitam GPS';
+        li.title = 'Só viagens em andamento aceitam GPS';
       }
       ul.appendChild(li);
     });
@@ -243,6 +347,8 @@
     state.enviadas = 0;
     state.alertas = 0;
     state.buffer = [];
+    state.sessaoExpirada = false;
+    state.ultimoPonto = null;
     $('track-titulo').textContent = 'Viagem · ' + (v.veiculo_placa || '');
     $('m-enviadas').textContent = '0';
     $('m-buffer').textContent = '0';
@@ -251,6 +357,15 @@
     $('m-coords').textContent = 'Sem posição ainda';
     $('log').innerHTML = '';
     setTrackingUI(false);
+
+    // Recupera pontos pendentes desta viagem (aba fechada antes de enviar).
+    var salvo = loadBufferSalvo();
+    if (salvo && salvo.viagemId === v.id) {
+      state.buffer = salvo.pontos;
+      $('m-buffer').textContent = String(state.buffer.length);
+      logLine('recuperados ' + state.buffer.length + ' ponto(s) pendente(s)', 'ok');
+      flush();
+    }
     show('track');
   }
 
@@ -258,9 +373,23 @@
     var st = $('track-status');
     st.textContent = on ? 'Rastreando…' : 'Parado';
     st.classList.toggle('tracking', on);
+    st.classList.remove('expirada');
     $('btn-start').hidden = on;
     $('btn-stop').hidden = !on;
     setConn(on);
+  }
+
+  // Sessão expirada NÃO pode ficar silenciosa: status vermelho + toque leva
+  // ao re-login (o buffer e a viagem ficam preservados).
+  function marcarSessaoExpirada() {
+    if (state.sessaoExpirada) return;
+    state.sessaoExpirada = true;
+    var st = $('track-status');
+    st.textContent = 'Sessão expirada — toque para entrar de novo';
+    st.classList.remove('tracking');
+    st.classList.add('expirada');
+    setConn(false);
+    logLine('sessão expirada — faça login de novo pra retomar o envio', 'err');
   }
 
   function startTracking() {
@@ -274,10 +403,11 @@
 
     state.watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, {
       enableHighAccuracy: true,
-      maximumAge: 0,
+      maximumAge: 3000, // aceita posição recém-calculada (economia de bateria)
       timeout: 20000,
     });
     state.flushTimer = setInterval(flush, FLUSH_MS);
+    pedirWakeLock(); // mantém a tela ligada durante o rastreio
     setTrackingUI(true);
     logLine('rastreio iniciado', 'ok');
   }
@@ -291,6 +421,7 @@
       clearInterval(state.flushTimer);
       state.flushTimer = null;
     }
+    soltarWakeLock();
     setTrackingUI(false);
     flush(); // envia o que sobrou
     logLine('rastreio parado', 'ok');
@@ -311,10 +442,21 @@
       ponto.precisao_m = Math.round(c.accuracy * 10) / 10;
     }
 
-    state.buffer.push(ponto);
-    $('m-buffer').textContent = String(state.buffer.length);
+    // Atualiza a telinha mesmo quando o ponto não entra no buffer.
     $('m-coords').textContent = ponto.lat.toFixed(6) + ', ' + ponto.lng.toFixed(6);
     $('m-precisao').textContent = ponto.precisao_m != null ? ponto.precisao_m + ' m' : '—';
+
+    // Economia de bateria/dados: parado no mesmo lugar, um ponto a cada 5s basta.
+    if (state.ultimoPonto) {
+      var dt = pos.timestamp - state.ultimoPonto.time;
+      var dist = distanciaM(ponto, state.ultimoPonto);
+      if (dist < MIN_DIST_M && dt < MIN_INTERVALO_MS) return;
+    }
+    state.ultimoPonto = { lat: ponto.lat, lng: ponto.lng, time: pos.timestamp };
+
+    state.buffer.push(ponto);
+    saveBuffer();
+    $('m-buffer').textContent = String(state.buffer.length);
 
     if (state.buffer.length >= MAX_BUFFER) flush();
   }
@@ -333,6 +475,7 @@
 
   function flush() {
     if (state.flushing || state.buffer.length === 0 || !state.viagem) return;
+    if (state.sessaoExpirada) return; // sem sessão não adianta tentar; buffer preservado
     state.flushing = true;
 
     var lote = state.buffer.splice(0, state.buffer.length);
@@ -343,6 +486,8 @@
       body: JSON.stringify({ posicoes: lote }),
     })
       .then(function (res) {
+        // 401 aqui = o refresh automático do apiFetch também falhou.
+        if (res.status === 401 || res.status === 403) throw new Error('sessao_expirada');
         if (!res.ok) {
           return readError(res).then(function (m) {
             throw new Error(m);
@@ -351,6 +496,7 @@
         return res.json();
       })
       .then(function (r) {
+        saveBuffer(); // lote saiu do buffer de verdade → atualiza o persistido
         state.enviadas += r.inseridas || lote.length;
         state.alertas += (r.alertas && r.alertas.length) || 0;
         $('m-enviadas').textContent = String(state.enviadas);
@@ -366,17 +512,46 @@
                 })
                 .join(', ')
             : '';
+        if (r.descartadas) extra += ' · ' + r.descartadas + ' descartada(s) (GPS ruim)';
         logLine('enviadas ' + lote.length + ' posição(ões)' + extra, 'ok');
       })
       .catch(function (e) {
         // devolve o lote ao buffer para tentar de novo no próximo flush
         state.buffer = lote.concat(state.buffer);
+        saveBuffer();
         $('m-buffer').textContent = String(state.buffer.length);
-        logLine('falha ao enviar: ' + e.message, 'err');
+        if (e.message === 'sessao_expirada') {
+          marcarSessaoExpirada();
+        } else {
+          logLine('falha ao enviar: ' + e.message, 'err');
+        }
       })
       .finally(function () {
         state.flushing = false;
       });
+  }
+
+  // Flush final "de emergência": a página está fechando/sumindo e fetch se
+  // perderia no meio do caminho — sendBeacon garante a entrega do lote.
+  // (sendBeacon não envia header Authorization → token vai na query.)
+  function flushBeacon() {
+    if (!state.viagem || state.buffer.length === 0) return;
+    if (!state.accessToken || state.sessaoExpirada) return;
+    if (!navigator.sendBeacon) return;
+    var url =
+      '/api/app/posicoes-beacon?token=' +
+      encodeURIComponent(state.accessToken) +
+      '&viagem=' +
+      encodeURIComponent(state.viagem.id);
+    var corpo = new Blob([JSON.stringify({ posicoes: state.buffer })], {
+      type: 'application/json',
+    });
+    if (navigator.sendBeacon(url, corpo)) {
+      // Lote aceito pela fila do navegador (entrega mesmo com a aba fechada).
+      state.buffer = [];
+      saveBuffer();
+      $('m-buffer').textContent = '0';
+    }
   }
 
   function sair() {
@@ -401,11 +576,26 @@
   $('btn-start').addEventListener('click', startTracking);
   $('btn-stop').addEventListener('click', stopTracking);
 
-  // avisa se o usuário sair com rastreio ligado
+  // Sessão expirada: toque no status leva ao re-login (buffer preservado).
+  $('track-status').addEventListener('click', function () {
+    if (state.sessaoExpirada) show('login');
+  });
+
+  // Página fechando/perdendo o foco: garante o lote via sendBeacon e avisa
+  // se o usuário sair com rastreio ligado.
   window.addEventListener('beforeunload', function (e) {
+    flushBeacon();
     if (state.watchId != null) {
       e.preventDefault();
       e.returnValue = '';
+    }
+  });
+  window.addEventListener('pagehide', flushBeacon);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      flushBeacon(); // a aba pode ser morta sem beforeunload (Android)
+    } else if (state.watchId != null && !state.wakeLock) {
+      pedirWakeLock(); // o Wake Lock é liberado quando a aba sai de cena
     }
   });
 

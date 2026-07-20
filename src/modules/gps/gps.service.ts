@@ -3,6 +3,8 @@ import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { ingestPosicoesSchema, type IngestPosicoesInput, type PosicaoInput } from './gps.schemas';
 import { matchTrajeto } from '../../integrations/mapmatch/valhalla';
+import { matchTrajetoOsrm } from '../../integrations/mapmatch/osrm';
+import { detectarParadas, haversineM, type ParadaDetectada } from './paradas';
 import { ViagemStatus } from '../../domain/status';
 
 // ---------------------------------------------------------------------
@@ -13,6 +15,11 @@ const SEM_GPS_GAP_MS = 10 * 60 * 1000; // intervalo entre pontos → sem_gps
 const PARADA_RAIO_M = 50; // raio para considerar "parado"
 const PARADA_TEMPO_MS = 15 * 60 * 1000; // parado por mais que isso → parada_longa
 const COOLDOWN_MS = 5 * 60 * 1000; // janela mínima entre alertas do mesmo tipo
+
+// Filtro de qualidade na ingestão: ponto ruim NÃO persiste, mas a resposta
+// segue OK (o app não deve reenviar — o ponto é ruim mesmo).
+const PRECISAO_MAX_M = 50; // precisão pior que isso → ponto impreciso demais
+const TELETRANSPORTE_KMH = 160; // velocidade implícita acima disso → "teletransporte"
 
 type AlertaTipo = 'desvio_rota' | 'parada_longa' | 'velocidade_alta' | 'sem_gps';
 
@@ -28,6 +35,7 @@ export interface AlertaGerado {
 
 export interface IngestResult {
   inseridas: number;
+  descartadas: number; // pontos ruins filtrados (precisão/teletransporte)
   alertas: AlertaGerado[];
 }
 
@@ -35,18 +43,6 @@ interface Ponto {
   lat: number;
   lng: number;
   time: number; // epoch ms de registrado_em
-}
-
-// Distância aproximada em metros entre dois pontos (haversine).
-function distanciaM(a: Ponto, b: Ponto): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
 async function inserirAlerta(
@@ -155,10 +151,26 @@ export async function ingestPosicoes(
 
     const alertas: AlertaGerado[] = [];
     let inseridas = 0;
+    let descartadas = 0;
 
     for (const p of posicoes) {
       const time = p.registrado_em.getTime();
       const ponto: Ponto = { lat: p.lat, lng: p.lng, time };
+
+      // --- Filtro de qualidade (não persiste, não vira alerta, não vira prev) ---
+      // Precisão ruim: o círculo de incerteza é grande demais para valer algo.
+      if (p.precisao_m != null && p.precisao_m > PRECISAO_MAX_M) {
+        descartadas++;
+        continue;
+      }
+      // "Teletransporte": velocidade implícita impossível vs o ponto anterior.
+      if (prev && time > prev.time) {
+        const velImplicitaKmh = (haversineM(ponto, prev) / ((time - prev.time) / 1000)) * 3.6;
+        if (velImplicitaKmh > TELETRANSPORTE_KMH) {
+          descartadas++;
+          continue;
+        }
+      }
 
       await client.query(
         `INSERT INTO posicoes_gps (empresa_id, viagem_id, coordenada, velocidade_kmh, precisao_m, registrado_em)
@@ -214,7 +226,7 @@ export async function ingestPosicoes(
       if (stopAnchor == null) {
         stopAnchor = ponto;
         stopEmitido = false;
-      } else if (distanciaM(ponto, stopAnchor) <= PARADA_RAIO_M) {
+      } else if (haversineM(ponto, stopAnchor) <= PARADA_RAIO_M) {
         if (!stopEmitido && time - stopAnchor.time >= PARADA_TEMPO_MS) {
           const minutos = Math.round((time - stopAnchor.time) / 60000);
           candidatos.push({
@@ -239,7 +251,7 @@ export async function ingestPosicoes(
       prev = ponto;
     }
 
-    return { inseridas, alertas };
+    return { inseridas, descartadas, alertas };
   });
 }
 
@@ -298,7 +310,7 @@ export async function ingestOverland(
     .filter((p): p is Record<string, unknown> => p !== null);
 
   // Overland envia pings sem posições; nesse caso só confirmamos.
-  if (brutas.length === 0) return { inseridas: 0, alertas: [] };
+  if (brutas.length === 0) return { inseridas: 0, descartadas: 0, alertas: [] };
 
   const parsed = ingestPosicoesSchema.parse({ posicoes: brutas });
   return ingestPosicoesViagemAtual(empresaId, motoristaId, parsed);
@@ -323,7 +335,12 @@ const MAX_PONTOS_TRAJETO = 50_000;
 export async function getTrajetoria(
   empresaId: string,
   viagemId: string,
-): Promise<{ viagem_id: string; total: number; pontos: PontoTrajeto[] }> {
+): Promise<{
+  viagem_id: string;
+  total: number;
+  pontos: PontoTrajeto[];
+  paradas_detectadas: ParadaDetectada[];
+}> {
   const existe = await queryOne<{ id: string }>(
     'SELECT id FROM viagens WHERE id = $1 AND empresa_id = $2',
     [viagemId, empresaId],
@@ -359,7 +376,18 @@ export async function getTrajetoria(
     recebido_em: r.recebido_em,
   }));
 
-  return { viagem_id: viagemId, total: pontos.length, pontos };
+  // Paradas automáticas: clusters onde o veículo ficou parado 5+ min.
+  // Calculado on-read a partir dos próprios pontos (sem tabela nova).
+  const paradasDetectadas = detectarParadas(
+    pontos.map((p) => ({ lat: p.lat, lng: p.lng, time: new Date(p.registrado_em).getTime() })),
+  );
+
+  return {
+    viagem_id: viagemId,
+    total: pontos.length,
+    pontos,
+    paradas_detectadas: paradasDetectadas,
+  };
 }
 
 // ---------------------------------------------------------------------
@@ -371,16 +399,42 @@ export interface TrajetoRuas {
   linha: { lng: number; lat: number }[];
 }
 
+// Cache simples em memória do trajeto encaixado: evita bater no serviço
+// externo a cada poll do dashboard. A chave muda quando chegam pontos novos.
+const trajetoRuasCache = new Map<string, { chave: string; expira: number; resultado: TrajetoRuas }>();
+const TRAJETO_RUAS_CACHE_MS = 10 * 60 * 1000; // TTL (a chave já invalida por ponto novo)
+const TRAJETO_RUAS_CACHE_MAX = 200; // teto de viagens em cache
+
 export async function getTrajetoRuas(empresaId: string, viagemId: string): Promise<TrajetoRuas> {
   const { pontos } = await getTrajetoria(empresaId, viagemId); // já valida a viagem/tenant
   const bruto = pontos.map((p) => ({ lng: p.lng, lat: p.lat }));
 
-  // Plano A: encaixar nas ruas. Plano B: devolver a linha bruta.
-  const ruas = await matchTrajeto(bruto);
-  if (ruas && ruas.length >= 2) {
-    return { viagem_id: viagemId, fonte: 'ruas', linha: ruas.map(([lng, lat]) => ({ lng, lat })) };
+  const chave = `${pontos.length}:${pontos[pontos.length - 1]?.registrado_em ?? ''}`;
+  const emCache = trajetoRuasCache.get(viagemId);
+  if (emCache && emCache.chave === chave && emCache.expira > Date.now()) {
+    return emCache.resultado;
   }
-  return { viagem_id: viagemId, fonte: 'gps', linha: bruto };
+
+  // Plano A: encaixar nas ruas (Valhalla; se falhar, OSRM). Plano B: linha bruta.
+  const ruas =
+    (await matchTrajeto(bruto)) ??
+    (await matchTrajetoOsrm(pontos.map((p) => ({ lat: p.lat, lng: p.lng, precisao_m: p.precisao_m }))));
+
+  const resultado: TrajetoRuas =
+    ruas && ruas.length >= 2
+      ? { viagem_id: viagemId, fonte: 'ruas', linha: ruas.map(([lng, lat]) => ({ lng, lat })) }
+      : { viagem_id: viagemId, fonte: 'gps', linha: bruto };
+
+  // Só vale a pena guardar o resultado "bom" (o fallback tende a ser transitório).
+  if (resultado.fonte === 'ruas') {
+    if (trajetoRuasCache.size >= TRAJETO_RUAS_CACHE_MAX) trajetoRuasCache.clear();
+    trajetoRuasCache.set(viagemId, {
+      chave,
+      expira: Date.now() + TRAJETO_RUAS_CACHE_MS,
+      resultado,
+    });
+  }
+  return resultado;
 }
 
 export interface MinhaViagem {
