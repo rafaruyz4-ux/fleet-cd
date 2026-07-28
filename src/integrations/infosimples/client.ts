@@ -62,7 +62,20 @@ function simular(placa: string): ResultadoConsulta {
 interface InfosimplesResposta {
   code: number;
   code_message?: string;
+  errors?: unknown[];
   data?: Array<Record<string, unknown>>;
+}
+
+// As datas da Infosimples vêm no formato brasileiro ("15/03/2026" ou
+// "15/03/2026 08:30"), que new Date() não entende — normalizamos para ISO aqui
+// para o resto do sistema não gravar data inválida no banco.
+function normalizarData(valor: string | undefined): string | undefined {
+  if (!valor) return undefined;
+  const br = valor.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  const iso = br
+    ? `${br[3]}-${br[2]}-${br[1]}T${br[4] ?? '00'}:${br[5] ?? '00'}:${br[6] ?? '00'}`
+    : valor;
+  return Number.isNaN(new Date(iso).getTime()) ? undefined : iso;
 }
 
 // Mapeia o "auto de infração" cru da Infosimples para o nosso formato. Os nomes
@@ -92,7 +105,7 @@ function mapearMulta(raw: Record<string, unknown>): DebitoMulta | null {
     tipo: s('descricao', 'infracao', 'tipo', 'enquadramento'),
     valor: Number.isFinite(valor) ? valor : undefined,
     pontos_cnh: Number.isFinite(pontos_cnh) ? pontos_cnh : undefined,
-    ocorrida_em: s('data_infracao', 'data', 'data_hora'),
+    ocorrida_em: normalizarData(s('data_infracao', 'data', 'data_hora')),
     local: s('local', 'municipio', 'endereco'),
   };
 }
@@ -156,9 +169,14 @@ export async function consultarDebitosVeiculo(args: ConsultaArgs): Promise<Resul
 
   // A Infosimples usa o campo "code": 200 = sucesso; 6xx = erros de negócio.
   if (json.code !== 200) {
+    // O motivo exato vem no array "errors" (mensagem do site de origem, ex.:
+    // "verificação em duas etapas ativada no gov.br") — sem ele só sabemos o code.
+    const detalhe = (json.errors ?? [])
+      .map((e) => (typeof e === 'string' ? e : JSON.stringify(e)))
+      .join(' | ');
     throw new AppError(
       502,
-      `Infosimples recusou a consulta (code ${json.code}): ${json.code_message ?? 'sem detalhe'}`,
+      `Infosimples recusou a consulta (code ${json.code}): ${json.code_message ?? 'sem detalhe'}${detalhe ? ` — Origem: ${detalhe}` : ''}`,
     );
   }
 
