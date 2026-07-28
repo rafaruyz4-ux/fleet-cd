@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import {
@@ -27,14 +28,16 @@ import { VeiculoFormModal } from './cadastros/VeiculoFormModal'
 import { MotoristaFormModal } from './cadastros/MotoristaFormModal'
 import { UnidadeFormModal } from './cadastros/UnidadeFormModal'
 import { RotaFormModal } from './cadastros/RotaFormModal'
+import { NfsTab } from './cadastros/NfsTab'
 
-type Aba = 'veiculos' | 'motoristas' | 'unidades' | 'rotas'
+type Aba = 'veiculos' | 'motoristas' | 'unidades' | 'rotas' | 'nfs'
 
 const ABAS: { key: Aba; label: string }[] = [
   { key: 'veiculos', label: 'Veículos' },
   { key: 'motoristas', label: 'Motoristas' },
   { key: 'unidades', label: 'Unidades' },
   { key: 'rotas', label: 'Rotas planejadas' },
+  { key: 'nfs', label: 'Notas fiscais' },
 ]
 
 function AtivoBadge({ ativo }: { ativo: boolean }) {
@@ -55,20 +58,28 @@ function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
 }
 
 export function CadastrosPage() {
-  const [aba, setAba] = useState<Aba>('veiculos')
+  // A aba vive na URL (?aba=motoristas): dá pra linkar direto, e F5/voltar
+  // não perdem o lugar.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const abaParam = searchParams.get('aba')
+  const aba: Aba = ABAS.some((a) => a.key === abaParam) ? (abaParam as Aba) : 'veiculos'
+  const setAba = (a: Aba) => setSearchParams(a === 'veiculos' ? {} : { aba: a })
 
   return (
     <div>
-      <PageHeader title="Cadastros" description="Veículos, motoristas, unidades e rotas." />
+      <PageHeader
+        title="Cadastros"
+        description="Veículos, motoristas, unidades, rotas e notas fiscais."
+      />
 
       <div className="space-y-4 p-6">
-        <div className="flex gap-1 border-b">
+        <div className="flex gap-1 overflow-x-auto border-b">
           {ABAS.map((a) => (
             <button
               key={a.key}
               onClick={() => setAba(a.key)}
               className={cn(
-                '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                '-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors',
                 aba === a.key
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -83,6 +94,7 @@ export function CadastrosPage() {
         {aba === 'motoristas' && <MotoristasTab />}
         {aba === 'unidades' && <UnidadesTab />}
         {aba === 'rotas' && <RotasTab />}
+        {aba === 'nfs' && <NfsTab />}
       </div>
     </div>
   )

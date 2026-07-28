@@ -122,7 +122,7 @@ export function AlertasPage() {
                             disabled={marcar.isPending}
                             onClick={() => marcar.mutate({ id: a.id, visualizado: true })}
                           >
-                            <Check className="h-4 w-4" /> Marcar visto
+                            <Check className="h-4 w-4" /> OK, visto
                           </Button>
                         )}
                       </div>

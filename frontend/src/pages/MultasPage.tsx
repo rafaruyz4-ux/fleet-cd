@@ -205,7 +205,7 @@ export function MultasPage() {
                               })
                             }
                           >
-                            <Link2 className="h-4 w-4" /> Revincular
+                            <Link2 className="h-4 w-4" /> Achar viagem
                           </Button>
                         )}
                       </div>

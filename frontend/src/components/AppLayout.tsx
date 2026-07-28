@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   Building2,
   CreditCard,
-  FileText,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -23,24 +22,29 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TrocarSenhaModal } from '@/components/TrocarSenhaModal'
 
-const NAV = [
-  { to: '/', label: 'Visão geral', icon: LayoutDashboard, end: true },
+type NavItem = {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+  end?: boolean
+}
+
+// Menu agrupado por assunto: dia a dia primeiro, conta depois.
+// Notas fiscais viraram aba de Cadastros (menos itens soltos no menu).
+const GRUPO_OPERACAO: NavItem[] = [
   { to: '/viagens', label: 'Viagens', icon: RouteIcon },
   { to: '/alertas', label: 'Alertas', icon: AlertTriangle },
   { to: '/multas', label: 'Multas', icon: Receipt },
-  { to: '/nfs', label: 'Notas fiscais', icon: FileText },
   { to: '/cadastros', label: 'Cadastros', icon: Users },
-  { to: '/assinatura', label: 'Assinatura', icon: CreditCard },
 ]
 
-// Itens exclusivos do ADMIN da empresa (gestão da conta).
-const NAV_ADMIN = [
-  { to: '/usuarios', label: 'Usuários', icon: UserCog, end: false },
-  { to: '/configuracoes', label: 'Configurações', icon: Settings, end: false },
+const NAV_ADMIN: NavItem[] = [
+  { to: '/usuarios', label: 'Usuários', icon: UserCog },
+  { to: '/configuracoes', label: 'Configurações', icon: Settings },
 ]
 
 // Itens exclusivos da equipe da plataforma (super admin).
-const NAV_SUPER = [{ to: '/bastidores', label: 'Bastidores', icon: Building2, end: false }]
+const NAV_SUPER: NavItem[] = [{ to: '/bastidores', label: 'Bastidores', icon: Building2 }]
 
 function Logo() {
   return (
@@ -70,10 +74,17 @@ function SidebarConteudo({
 }) {
   const { usuario, logout } = useAuth()
   const [trocarSenhaOpen, setTrocarSenhaOpen] = useState(false)
-  const nav = [
-    ...NAV,
-    ...(usuario?.papel === 'admin' ? NAV_ADMIN : []),
-    ...(usuario?.superAdmin ? NAV_SUPER : []),
+  const grupos: { titulo?: string; itens: NavItem[] }[] = [
+    { itens: [{ to: '/', label: 'Início', icon: LayoutDashboard, end: true }] },
+    { titulo: 'Operação', itens: GRUPO_OPERACAO },
+    {
+      titulo: 'Empresa',
+      itens: [
+        { to: '/assinatura', label: 'Assinatura', icon: CreditCard },
+        ...(usuario?.papel === 'admin' ? NAV_ADMIN : []),
+      ],
+    },
+    ...(usuario?.superAdmin ? [{ titulo: 'Plataforma', itens: NAV_SUPER }] : []),
   ]
 
   return (
@@ -86,25 +97,34 @@ function SidebarConteudo({
           </Button>
         )}
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {nav.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                isActive
-                  ? 'border border-primary/30 bg-primary/10 text-primary shadow-[0_0_16px_rgba(0,212,255,0.12)]'
-                  : 'border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground',
-              )
-            }
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </NavLink>
+      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+        {grupos.map((grupo, gi) => (
+          <div key={grupo.titulo ?? gi} className="space-y-1">
+            {grupo.titulo && (
+              <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+                {grupo.titulo}
+              </p>
+            )}
+            {grupo.itens.map(({ to, label, icon: Icon, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                    isActive
+                      ? 'border border-primary/30 bg-primary/10 text-primary shadow-[0_0_16px_rgba(0,212,255,0.12)]'
+                      : 'border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                  )
+                }
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
       <div className="border-t border-border/70 p-3">

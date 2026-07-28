@@ -11,7 +11,6 @@ import { ViagensPage } from '@/pages/ViagensPage'
 import { ViagemDetailPage } from '@/pages/ViagemDetailPage'
 import { AlertasPage } from '@/pages/AlertasPage'
 import { MultasPage } from '@/pages/MultasPage'
-import { NfsPage } from '@/pages/NfsPage'
 import { CadastrosPage } from '@/pages/CadastrosPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { ConfiguracoesPage } from '@/pages/ConfiguracoesPage'
@@ -63,7 +62,8 @@ export function App() {
         <Route path="viagens/:id" element={<ViagemDetailPage />} />
         <Route path="alertas" element={<AlertasPage />} />
         <Route path="multas" element={<MultasPage />} />
-        <Route path="nfs" element={<NfsPage />} />
+        {/* NFs viraram aba de Cadastros; o link antigo continua funcionando. */}
+        <Route path="nfs" element={<Navigate to="/cadastros?aba=nfs" replace />} />
         <Route path="cadastros" element={<CadastrosPage />} />
         <Route path="assinatura" element={<AssinaturaPage />} />
         <Route path="usuarios" element={<RequireAdmin><UsuariosPage /></RequireAdmin>} />

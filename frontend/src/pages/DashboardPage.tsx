@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
 
 export function DashboardPage() {
-  const emAndamento = useViagens({ status: 'em_andamento', limit: 1 })
+  const emAndamento = useViagens({ status: 'em_andamento', limit: 5 })
   const todasViagens = useViagens({ limit: 1 })
   const alertasNovos = useAlertas({ visualizado: false, limit: 5 })
   const multasRevisar = useMultas({ status_revisao: 'aguardando_revisao', limit: 1 })
@@ -30,7 +30,10 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Visão geral" description="Resumo da operação da frota." />
+      <PageHeader
+        title="Início"
+        description="O que está acontecendo agora e o que precisa de atenção."
+      />
 
       <div className="space-y-6 p-4 sm:p-6">
         <PrimeirosPassos
@@ -73,6 +76,53 @@ export function DashboardPage() {
             tone="text-success"
           />
         </div>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Na rua agora
+            </h2>
+            <Link to="/viagens" className="text-sm text-primary hover:underline">
+              Ver todas as viagens
+            </Link>
+          </div>
+          {emAndamento.isLoading ? (
+            <CardListSkeleton items={2} />
+          ) : emAndamento.data && emAndamento.data.data.length > 0 ? (
+            <div className="space-y-2">
+              {emAndamento.data.data.map((v) => (
+                <Link
+                  key={v.id}
+                  to={`/viagens/${v.id}`}
+                  className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                      <Truck className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {v.veiculo_placa}
+                        {v.veiculo_modelo ? ` · ${v.veiculo_modelo}` : ''}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{v.motorista_nome}</p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-muted-foreground">
+                      saiu {v.iniciada_em ? formatDateTime(v.iniciada_em) : '—'}
+                    </p>
+                    <p className="text-xs font-medium text-primary">Ver no mapa →</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+              Nenhum veículo em viagem neste momento.
+            </p>
+          )}
+        </section>
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
@@ -133,7 +183,11 @@ function PrimeirosPassos({
 
   const passos = [
     { done: temVeiculo, label: 'Cadastre um veículo', to: '/cadastros' },
-    { done: temMotorista, label: 'Cadastre um motorista (com senha do app)', to: '/cadastros' },
+    {
+      done: temMotorista,
+      label: 'Cadastre um motorista (com senha do app)',
+      to: '/cadastros?aba=motoristas',
+    },
     { done: temViagem, label: 'Crie a primeira viagem', to: '/viagens' },
   ]
   const linkApp = `${window.location.origin}/motorista`

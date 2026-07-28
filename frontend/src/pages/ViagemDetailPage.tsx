@@ -188,7 +188,7 @@ export function ViagemDetailPage() {
               {stats && (
                 <>
                   <p className="border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Telemetria (GPS)
+                    Resumo do trajeto (GPS)
                   </p>
                   <Info label="Km rodado (GPS)" value={`${stats.km.toFixed(1)} km`} />
                   <Info label="Tempo em movimento" value={formatDuracaoMin(stats.movimentoMin)} />
