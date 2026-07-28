@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -8,58 +8,57 @@
  * Design tokens (estilo shadcn/ui) expostos como CSS vars e mapeados para
  * utilitários Tailwind v4 via @theme inline.
  *
- * Tema: NEXUS ORBITAL — escuro por padrão (azul-marinho profundo + ciano).
- * A paleta vem da identidade oficial da Nexus Orbital:
- *   ciano #00D4FF · roxo #7B2FFF · verde #00E87A · fundo #050A14 · texto #E8F4FF
+ * Tema: CLARO E LIMPO — fundo cinza-claro, superfícies brancas e azul sóbrio
+ * como cor de ação. Substituiu o tema escuro neon em 28/07/2026.
  */
 :root {
-  --background: hsl(220 60% 5%);
-  --foreground: hsl(210 100% 96%);
-  --card: hsl(220 42% 9%);
-  --card-foreground: hsl(210 100% 96%);
-  --popover: hsl(220 45% 8%);
-  --popover-foreground: hsl(210 100% 96%);
-  --primary: hsl(190 100% 50%);
-  --primary-foreground: hsl(220 60% 6%);
-  --secondary: hsl(217 33% 14%);
-  --secondary-foreground: hsl(210 100% 96%);
-  --muted: hsl(217 33% 14%);
-  --muted-foreground: hsl(212 30% 64%);
-  --accent: hsl(200 80% 14%);
-  --accent-foreground: hsl(190 100% 82%);
-  --destructive: hsl(0 80% 62%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --success: hsl(152 100% 45%);
-  --warning: hsl(38 95% 55%);
-  --border: hsl(205 38% 16%);
-  --input: hsl(205 38% 18%);
-  --ring: hsl(190 100% 50%);
-  --radius: 0.75rem;
+  --background: hsl(220 25% 97%);
+  --foreground: hsl(224 35% 14%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(224 35% 14%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(224 35% 14%);
+  --primary: hsl(221 64% 44%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(220 20% 94%);
+  --secondary-foreground: hsl(224 35% 14%);
+  --muted: hsl(220 20% 94%);
+  --muted-foreground: hsl(220 12% 44%);
+  --accent: hsl(221 70% 96%);
+  --accent-foreground: hsl(221 64% 38%);
+  --destructive: hsl(0 68% 46%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --success: hsl(150 65% 33%);
+  --warning: hsl(32 90% 40%);
+  --border: hsl(220 16% 88%);
+  --input: hsl(220 16% 84%);
+  --ring: hsl(221 64% 44%);
+  --radius: 0.625rem;
 }
 
 /* Mantém o mesmo tema mesmo se a classe .dark for aplicada. */
 .dark {
-  --background: hsl(220 60% 5%);
-  --foreground: hsl(210 100% 96%);
-  --card: hsl(220 42% 9%);
-  --card-foreground: hsl(210 100% 96%);
-  --popover: hsl(220 45% 8%);
-  --popover-foreground: hsl(210 100% 96%);
-  --primary: hsl(190 100% 50%);
-  --primary-foreground: hsl(220 60% 6%);
-  --secondary: hsl(217 33% 14%);
-  --secondary-foreground: hsl(210 100% 96%);
-  --muted: hsl(217 33% 14%);
-  --muted-foreground: hsl(212 30% 64%);
-  --accent: hsl(200 80% 14%);
-  --accent-foreground: hsl(190 100% 82%);
-  --destructive: hsl(0 80% 62%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --success: hsl(152 100% 45%);
-  --warning: hsl(38 95% 55%);
-  --border: hsl(205 38% 16%);
-  --input: hsl(205 38% 18%);
-  --ring: hsl(190 100% 50%);
+  --background: hsl(220 25% 97%);
+  --foreground: hsl(224 35% 14%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(224 35% 14%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(224 35% 14%);
+  --primary: hsl(221 64% 44%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(220 20% 94%);
+  --secondary-foreground: hsl(224 35% 14%);
+  --muted: hsl(220 20% 94%);
+  --muted-foreground: hsl(220 12% 44%);
+  --accent: hsl(221 70% 96%);
+  --accent-foreground: hsl(221 64% 38%);
+  --destructive: hsl(0 68% 46%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --success: hsl(150 65% 33%);
+  --warning: hsl(32 90% 40%);
+  --border: hsl(220 16% 88%);
+  --input: hsl(220 16% 84%);
+  --ring: hsl(221 64% 44%);
 }
 
 @theme inline {
@@ -87,7 +86,7 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
 * {
@@ -100,28 +99,15 @@ body {
   color: var(--foreground);
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-
-  /* Assinatura visual da Nexus: brilho ciano/roxo nos cantos + grade sutil. */
-  background-image:
-    radial-gradient(circle at 12% -10%, rgba(0, 212, 255, 0.1), transparent 42%),
-    radial-gradient(circle at 100% 110%, rgba(123, 47, 255, 0.1), transparent 45%),
-    linear-gradient(rgba(0, 212, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.022) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    100% 100%,
-    64px 64px,
-    64px 64px;
-  background-attachment: fixed;
 }
 
 /* Shimmer dos skeletons de carregamento (varredura clara sobre o tom muted). */
 .skeleton-shimmer {
   background: linear-gradient(
     100deg,
-    hsl(217 33% 14%) 40%,
-    hsl(213 32% 21%) 50%,
-    hsl(217 33% 14%) 60%
+    hsl(220 20% 92%) 40%,
+    hsl(220 20% 96%) 50%,
+    hsl(220 20% 92%) 60%
   );
   background-size: 200% 100%;
   animation: skeleton-sweep 1.4s linear infinite;
@@ -135,7 +121,7 @@ body {
   }
 }
 
-/* Toasts (sonner) no tema Nexus: vidro escuro + detalhes em ciano/vermelho. */
+/* Toasts (sonner): ícones seguem as cores semânticas do tema. */
 [data-sonner-toast] [data-icon] {
   color: var(--primary);
 }
@@ -146,12 +132,12 @@ body {
   color: var(--warning);
 }
 
-/* Títulos na fonte de marca (Space Grotesk), levemente condensada. */
+/* Títulos: mesma família do corpo, peso forte e tracking levemente fechado. */
 h1,
 h2,
 h3,
 h4,
 .font-display {
-  font-family: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
   letter-spacing: -0.015em;
 }

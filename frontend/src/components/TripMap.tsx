@@ -113,7 +113,7 @@ function lineFC(coords: [number, number][]): FC {
 // ---- Marcadores customizados (HTML) ----
 function elInicio(): HTMLElement {
   const el = document.createElement('div')
-  el.className = 'h-3.5 w-3.5 rounded-full bg-emerald-400 shadow ring-2 ring-slate-900'
+  el.className = 'h-3.5 w-3.5 rounded-full bg-emerald-500 shadow ring-2 ring-white'
   return el
 }
 
@@ -121,14 +121,14 @@ function elPosicaoAtual(): HTMLElement {
   const el = document.createElement('div')
   el.className = 'relative flex h-4 w-4 items-center justify-center'
   el.innerHTML =
-    '<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400/70"></span>' +
-    '<span class="relative inline-flex h-3 w-3 rounded-full bg-cyan-400 shadow ring-2 ring-slate-900"></span>'
+    '<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500/60"></span>' +
+    '<span class="relative inline-flex h-3 w-3 rounded-full bg-blue-600 shadow ring-2 ring-white"></span>'
   return el
 }
 
 function elAlerta(cor: string): HTMLElement {
   const el = document.createElement('div')
-  el.className = 'flex h-5 w-5 items-center justify-center rounded-full shadow-md ring-2 ring-slate-900'
+  el.className = 'flex h-5 w-5 items-center justify-center rounded-full shadow-md ring-2 ring-white'
   el.style.backgroundColor = cor
   el.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-white"></span>'
   return el
@@ -148,10 +148,10 @@ function elFoco(): HTMLElement {
 function elParadaDetectada(): HTMLElement {
   const el = document.createElement('div')
   el.className =
-    'flex h-5 w-5 items-center justify-center gap-[3px] rounded-full bg-slate-200 shadow-md ring-2 ring-slate-900'
+    'flex h-5 w-5 items-center justify-center gap-[3px] rounded-full bg-slate-600 shadow-md ring-2 ring-white'
   el.innerHTML =
-    '<span class="h-2 w-[3px] rounded-sm bg-slate-900"></span>' +
-    '<span class="h-2 w-[3px] rounded-sm bg-slate-900"></span>'
+    '<span class="h-2 w-[3px] rounded-sm bg-white"></span>' +
+    '<span class="h-2 w-[3px] rounded-sm bg-white"></span>'
   return el
 }
 
@@ -223,15 +223,15 @@ export function TripMap({
           'line-opacity': 0.8,
         },
       })
-      // Brilho do trajeto (halo ciano) — efeito "central de controle".
+      // Contorno claro sob o trajeto: destaca a linha sobre o mapa claro.
       map.addLayer({
         id: 'trajeto-glow',
         type: 'line',
         source: 'trajeto',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#22d3ee', 'line-width': 13, 'line-opacity': 0.22, 'line-blur': 6 },
+        paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.9 },
       })
-      // Trajeto principal com gradiente ciano→azul.
+      // Trajeto principal em azul sóbrio.
       map.addLayer({
         id: 'trajeto',
         type: 'line',
@@ -244,9 +244,9 @@ export function TripMap({
             ['linear'],
             ['line-progress'],
             0,
-            '#22d3ee',
+            '#2757c4',
             1,
-            '#3b82f6',
+            '#2757c4',
           ],
         },
       })
@@ -376,13 +376,13 @@ export function TripMap({
       {erroTrajeto ? (
         // ERRO ≠ VAZIO: se a busca do trajeto falhou, avisa e oferece repetir.
         <div className="absolute inset-x-0 top-3 z-10 flex justify-center">
-          <div className="flex items-center gap-2 rounded-full border border-red-400/30 bg-slate-900/90 px-3 py-1.5 text-xs font-medium text-red-300 shadow-md backdrop-blur">
+          <div className="flex items-center gap-2 rounded-full border border-red-200 bg-white/95 px-3 py-1.5 text-xs font-medium text-red-700 shadow-md">
             Erro ao carregar o trajeto.
             {onTentarNovamente && (
               <button
                 type="button"
                 onClick={onTentarNovamente}
-                className="rounded-full bg-red-400/15 px-2 py-0.5 font-semibold text-red-200 transition-colors hover:bg-red-400/25"
+                className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 transition-colors hover:bg-red-200"
               >
                 Tentar de novo
               </button>
@@ -392,7 +392,7 @@ export function TripMap({
       ) : (
         semTrajeto && (
           <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
-            <div className="rounded-full border border-white/10 bg-slate-900/85 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-md backdrop-blur">
+            <div className="rounded-full border bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-md">
               Sem trajeto GPS ainda — aparece aqui quando o motorista enviar a localização.
             </div>
           </div>
@@ -409,8 +409,8 @@ export function TripMap({
             className={cn(
               'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors',
               seguirRuas
-                ? 'border-cyan-400/40 bg-cyan-500/20 text-cyan-300'
-                : 'border-white/10 bg-slate-900/85 text-slate-300 hover:text-slate-100',
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                : 'bg-white/95 text-slate-600 hover:text-slate-900',
             )}
           >
             <Route className="h-3.5 w-3.5" /> Seguir ruas
@@ -421,7 +421,7 @@ export function TripMap({
             type="button"
             onClick={() => recentrarRef.current?.()}
             title="Recentralizar o mapa no trajeto"
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-300 shadow-md backdrop-blur transition-colors hover:text-slate-100"
+            className="flex items-center gap-1.5 rounded-lg border bg-white/95 px-2.5 py-1.5 text-xs font-medium text-slate-600 shadow-md transition-colors hover:text-slate-900"
           >
             <Crosshair className="h-3.5 w-3.5" /> Recentralizar
           </button>
@@ -433,10 +433,10 @@ export function TripMap({
   )
 }
 
-// Legenda flutuante (vidro escuro) no canto inferior esquerdo.
+// Legenda flutuante no canto inferior esquerdo.
 function MapaLegenda() {
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border border-white/10 bg-slate-900/85 px-3 py-2 text-xs text-slate-200 shadow-lg backdrop-blur">
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg">
       <ul className="space-y-1">
         <li className="flex items-center gap-2">
           <span className="flex w-4 overflow-hidden rounded-full">
@@ -447,25 +447,25 @@ function MapaLegenda() {
           Velocidade ≤60 · 60–90 · &gt;90 km/h
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-slate-400" />
+          <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-slate-500" />
           Rota planejada
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
           Início
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 ring-2 ring-slate-900" />
+          <span className="h-2.5 w-2.5 rounded-full bg-blue-600 ring-2 ring-white" />
           Posição atual
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900" />
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white" />
           Alerta / ponto focado
         </li>
         <li className="flex items-center gap-2">
-          <span className="flex h-2.5 w-2.5 items-center justify-center gap-[1.5px] rounded-full bg-slate-200 ring-2 ring-slate-900">
-            <span className="h-1 w-[1.5px] bg-slate-900" />
-            <span className="h-1 w-[1.5px] bg-slate-900" />
+          <span className="flex h-2.5 w-2.5 items-center justify-center gap-[1.5px] rounded-full bg-slate-600 ring-2 ring-white">
+            <span className="h-1 w-[1.5px] bg-white" />
+            <span className="h-1 w-[1.5px] bg-white" />
           </span>
           Parada detectada
         </li>

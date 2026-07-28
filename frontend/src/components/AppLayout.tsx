@@ -49,7 +49,7 @@ const NAV_SUPER: NavItem[] = [{ to: '/bastidores', label: 'Bastidores', icon: Bu
 function Logo() {
   return (
     <div className="flex items-center gap-3">
-      <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[hsl(258_100%_62%)] text-primary-foreground shadow-[0_0_18px_rgba(0,212,255,0.45)]">
+      <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
         <Truck className="h-5 w-5" />
       </div>
       <div className="leading-tight">
@@ -115,8 +115,8 @@ function SidebarConteudo({
                   cn(
                     'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                     isActive
-                      ? 'border border-primary/30 bg-primary/10 text-primary shadow-[0_0_16px_rgba(0,212,255,0.12)]'
-                      : 'border border-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                      ? 'bg-accent font-semibold text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )
                 }
               >
@@ -129,7 +129,7 @@ function SidebarConteudo({
       </nav>
       <div className="border-t border-border/70 p-3">
         <div className="mb-2 flex items-center gap-3 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/80 to-[hsl(258_100%_62%)] text-xs font-bold text-primary-foreground">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
             {(usuario?.nome ?? '?').slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0">
@@ -197,7 +197,7 @@ export function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-transparent">
       {/* Sidebar fixa — só no desktop (lg+) */}
-      <aside className="hidden w-60 flex-col border-r border-border/70 bg-card/60 backdrop-blur-xl lg:flex">
+      <aside className="hidden w-60 flex-col border-r bg-card lg:flex">
         <SidebarConteudo />
       </aside>
 
@@ -209,7 +209,7 @@ export function AppLayout() {
             onClick={() => setMenuAberto(false)}
             aria-hidden
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col border-r border-border/70 bg-card/95 shadow-2xl backdrop-blur-xl">
+          <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col border-r bg-card shadow-2xl">
             <SidebarConteudo
               onNavigate={() => setMenuAberto(false)}
               onFechar={() => setMenuAberto(false)}
@@ -221,7 +221,7 @@ export function AppLayout() {
       {/* Conteúdo */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Barra superior — só no mobile */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-card/60 px-3 backdrop-blur-xl lg:hidden">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 lg:hidden">
           <Button
             variant="ghost"
             size="icon"
@@ -252,7 +252,7 @@ export function PageHeader({
   actions?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/70 bg-card/40 px-4 py-5 backdrop-blur sm:px-6">
+    <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-card px-4 py-5 sm:px-6">
       <div>
         <h1 className="font-display text-xl font-bold">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

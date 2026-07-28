@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Check, Clock, CreditCard, ExternalLink, Receipt, Sparkles, Zap } from 'lucide-react'
+import { Check, Clock, CreditCard, ExternalLink, Sparkles, Zap } from 'lucide-react'
 import { useAssinatura, useConsumoConsultas, useFaturas, useMudarPlano } from '@/api/hooks'
 import { PageHeader } from '@/components/AppLayout'
 import { DataState } from '@/components/DataState'
@@ -21,6 +22,14 @@ const ICONE: Record<PlanoFaixa, typeof Zap> = {
   pro: Sparkles,
   enterprise: CreditCard,
 }
+
+type Aba = 'plano' | 'planos' | 'faturas'
+
+const ABAS: { key: Aba; label: string }[] = [
+  { key: 'plano', label: 'Meu plano' },
+  { key: 'planos', label: 'Mudar de plano' },
+  { key: 'faturas', label: 'Faturas' },
+]
 
 function statusBadge(status: string) {
   const map: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'muted' }> = {
@@ -62,8 +71,12 @@ function formatarVencimento(data: string): string {
 export function AssinaturaPage() {
   const { data: assinatura, isLoading, error } = useAssinatura()
   const { data: consumo } = useConsumoConsultas()
-  const faturas = useFaturas()
   const mudarPlano = useMudarPlano()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const abaParam = searchParams.get('aba')
+  const aba: Aba = ABAS.some((a) => a.key === abaParam) ? (abaParam as Aba) : 'plano'
+  const setAba = (a: Aba) => setSearchParams(a === 'plano' ? {} : { aba: a })
+
   const [faixaAlvo, setFaixaAlvo] = useState<PlanoFaixa | null>(null)
   // Plano escolhido aguardando o "sim" no diálogo de confirmação.
   const [confirmarFaixa, setConfirmarFaixa] = useState<PlanoFaixa | null>(null)
@@ -87,35 +100,45 @@ export function AssinaturaPage() {
     }
   }
 
-  const atual = assinatura?.faixa
   const pendente = assinatura?.faixaPendente ?? null
-  const idxAtual = atual ? PLANO_ORDEM.indexOf(atual) : -1
 
   return (
     <div>
-      <PageHeader
-        title="Assinatura"
-        description="Seu plano, consumo e cobrança mensal."
-      />
+      <PageHeader title="Assinatura" description="Seu plano, consumo e cobrança mensal." />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-6">
+        <div className="flex gap-1 overflow-x-auto border-b">
+          {ABAS.map((a) => (
+            <button
+              key={a.key}
+              onClick={() => setAba(a.key)}
+              className={cn(
+                '-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                aba === a.key
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+
         <DataState isLoading={isLoading} error={error} loadingLabel="Carregando assinatura…" />
 
-        {assinatura && (
-          <>
-            {/* Resumo do plano atual */}
-            <Card className="relative overflow-hidden">
-              <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]" />
+        {assinatura && aba === 'plano' && (
+          <div className="space-y-4">
+            <Card>
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-1">
-                    <CardDescription className="text-[10px] font-semibold uppercase tracking-[0.25em] text-primary">
+                    <CardDescription className="text-xs font-semibold uppercase tracking-wide">
                       Plano atual
                     </CardDescription>
-                    <CardTitle className="font-display text-2xl">{assinatura.plano}</CardTitle>
+                    <CardTitle className="text-2xl">{assinatura.plano}</CardTitle>
                   </div>
                   <div className="text-right">
-                    <div className="font-display text-2xl font-bold">
+                    <div className="text-2xl font-bold">
                       {precoMensal(assinatura.precoMensalCentavos)}
                       <span className="text-sm font-normal text-muted-foreground">/mês</span>
                     </div>
@@ -151,136 +174,30 @@ export function AssinaturaPage() {
               </div>
             )}
 
-            {erroTroca && (
-              <p className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {erroTroca}
-              </p>
-            )}
-
-            {/* Cards dos planos */}
-            <div>
-              <h2 className="mb-3 font-display text-lg font-bold">Planos disponíveis</h2>
-              <div className="grid gap-4 lg:grid-cols-3">
-                {PLANO_ORDEM.map((faixa) => {
-                  const p = PLANOS_UI[faixa]
-                  const Icone = ICONE[faixa]
-                  const ehAtual = faixa === atual
-                  const ehPendente = faixa === pendente
-                  const idx = PLANO_ORDEM.indexOf(faixa)
-                  const ehUpgrade = idx > idxAtual
-                  const trocando = mudarPlano.isPending && faixaAlvo === faixa
-                  return (
-                    <Card
-                      key={faixa}
-                      className={cn(
-                        'flex flex-col',
-                        ehAtual && 'border-primary/60 shadow-[0_0_24px_rgba(0,212,255,0.15)]',
-                      )}
-                    >
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/80 to-[hsl(258_100%_62%)] text-primary-foreground">
-                            <Icone className="h-5 w-5" />
-                          </div>
-                          {ehAtual && <Badge variant="success">Plano atual</Badge>}
-                          {ehPendente && !ehAtual && (
-                            <Badge variant="warning">Aguardando pagamento</Badge>
-                          )}
-                        </div>
-                        <CardTitle className="font-display text-xl">{p.nome}</CardTitle>
-                        <CardDescription>{p.resumo}</CardDescription>
-                        <div className="pt-1 font-display text-3xl font-bold">
-                          {precoMensal(p.precoMensalCentavos)}
-                          <span className="text-sm font-normal text-muted-foreground">/mês</span>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="flex flex-1 flex-col gap-4">
-                        <ul className="space-y-2 text-sm">
-                          <Item>{limiteTexto(p.limiteVeiculos, 'veículos')}</Item>
-                          <Item>{limiteTexto(p.limiteConsultasMes, 'consultas de débitos/mês')}</Item>
-                          <Item>Rastreio GPS, viagens e alertas</Item>
-                          <Item>Multas vinculadas automaticamente</Item>
-                        </ul>
-                        <div className="mt-auto">
-                          <Button
-                            className="w-full"
-                            variant={ehAtual ? 'outline' : ehUpgrade ? 'default' : 'outline'}
-                            disabled={ehAtual || ehPendente || mudarPlano.isPending}
-                            onClick={() => setConfirmarFaixa(faixa)}
-                          >
-                            {trocando && <Spinner />}
-                            {ehAtual
-                              ? 'Plano atual'
-                              : ehPendente
-                                ? 'Aguardando pagamento'
-                                : ehUpgrade
-                                  ? 'Fazer upgrade'
-                                  : 'Mudar para este'}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
-              <p className="mt-4 text-xs text-muted-foreground">
-                A cobrança é feita mensalmente pelo Asaas. A troca de plano só entra em vigor após a
-                confirmação do pagamento. No downgrade, é preciso que a frota ativa caiba no limite
-                do novo plano.
-              </p>
-            </div>
-
-            {/* Faturas da assinatura */}
-            <div>
-              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold">
-                <Receipt className="h-5 w-5 text-primary" /> Faturas
-              </h2>
-              <DataState
-                isLoading={faturas.isLoading}
-                error={faturas.error}
-                isEmpty={(faturas.data ?? []).length === 0}
-                emptyLabel="Nenhuma fatura ainda — elas aparecem aqui quando a cobrança começar."
-                loadingLabel="Carregando faturas…"
-              />
-              {(faturas.data ?? []).length > 0 && (
-                <Table>
-                  <THead>
-                    <TR>
-                      <TH>Vencimento</TH>
-                      <TH>Valor</TH>
-                      <TH>Status</TH>
-                      <TH></TH>
-                    </TR>
-                  </THead>
-                  <TBody>
-                    {faturas.data!.map((f) => (
-                      <TR key={f.id}>
-                        <TD className="whitespace-nowrap">{formatarVencimento(f.vencimento)}</TD>
-                        <TD>{formatCurrency(f.valorCentavos / 100)}</TD>
-                        <TD>{faturaBadge(f.status)}</TD>
-                        <TD className="text-right">
-                          {(f.linkFatura ?? f.linkBoleto) ? (
-                            <a
-                              href={f.linkFatura ?? f.linkBoleto ?? undefined}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              <Button size="sm" variant="outline">
-                                <ExternalLink className="h-4 w-4" /> Abrir boleto
-                              </Button>
-                            </a>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Sem link</span>
-                          )}
-                        </TD>
-                      </TR>
-                    ))}
-                  </TBody>
-                </Table>
-              )}
-            </div>
-          </>
+            <p className="text-sm text-muted-foreground">
+              Quer mais veículos ou consultas?{' '}
+              <button
+                type="button"
+                onClick={() => setAba('planos')}
+                className="font-medium text-primary hover:underline"
+              >
+                Ver os planos disponíveis →
+              </button>
+            </p>
+          </div>
         )}
+
+        {assinatura && aba === 'planos' && (
+          <PlanosTab
+            assinatura={{ atual: assinatura.faixa, pendente }}
+            erroTroca={erroTroca}
+            trocando={mudarPlano.isPending}
+            faixaAlvo={faixaAlvo}
+            onEscolher={setConfirmarFaixa}
+          />
+        )}
+
+        {aba === 'faturas' && <FaturasTab />}
       </div>
 
       {/* Confirmação da troca de plano: mostra o valor e o aviso do pagamento. */}
@@ -303,6 +220,141 @@ export function AssinaturaPage() {
         confirmLabel="Confirmar troca"
         loading={mudarPlano.isPending}
       />
+    </div>
+  )
+}
+
+function PlanosTab({
+  assinatura,
+  erroTroca,
+  trocando,
+  faixaAlvo,
+  onEscolher,
+}: {
+  assinatura: { atual: PlanoFaixa; pendente: PlanoFaixa | null }
+  erroTroca: string | null
+  trocando: boolean
+  faixaAlvo: PlanoFaixa | null
+  onEscolher: (faixa: PlanoFaixa) => void
+}) {
+  const idxAtual = PLANO_ORDEM.indexOf(assinatura.atual)
+  return (
+    <div className="space-y-4">
+      {erroTroca && (
+        <p className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {erroTroca}
+        </p>
+      )}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {PLANO_ORDEM.map((faixa) => {
+          const p = PLANOS_UI[faixa]
+          const Icone = ICONE[faixa]
+          const ehAtual = faixa === assinatura.atual
+          const ehPendente = faixa === assinatura.pendente
+          const ehUpgrade = PLANO_ORDEM.indexOf(faixa) > idxAtual
+          const carregando = trocando && faixaAlvo === faixa
+          return (
+            <Card key={faixa} className={cn('flex flex-col', ehAtual && 'border-primary')}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                    <Icone className="h-5 w-5" />
+                  </div>
+                  {ehAtual && <Badge variant="success">Plano atual</Badge>}
+                  {ehPendente && !ehAtual && <Badge variant="warning">Aguardando pagamento</Badge>}
+                </div>
+                <CardTitle className="text-xl">{p.nome}</CardTitle>
+                <CardDescription>{p.resumo}</CardDescription>
+                <div className="pt-1 text-3xl font-bold">
+                  {precoMensal(p.precoMensalCentavos)}
+                  <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-4">
+                <ul className="space-y-2 text-sm">
+                  <Item>{limiteTexto(p.limiteVeiculos, 'veículos')}</Item>
+                  <Item>{limiteTexto(p.limiteConsultasMes, 'consultas de débitos/mês')}</Item>
+                  <Item>Rastreio GPS, viagens e alertas</Item>
+                  <Item>Multas vinculadas automaticamente</Item>
+                </ul>
+                <div className="mt-auto">
+                  <Button
+                    className="w-full"
+                    variant={ehAtual || !ehUpgrade ? 'outline' : 'default'}
+                    disabled={ehAtual || ehPendente || trocando}
+                    onClick={() => onEscolher(faixa)}
+                  >
+                    {carregando && <Spinner />}
+                    {ehAtual
+                      ? 'Plano atual'
+                      : ehPendente
+                        ? 'Aguardando pagamento'
+                        : ehUpgrade
+                          ? 'Fazer upgrade'
+                          : 'Mudar para este'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        A cobrança é feita mensalmente pelo Asaas. A troca de plano só entra em vigor após a
+        confirmação do pagamento. No downgrade, é preciso que a frota ativa caiba no limite do novo
+        plano.
+      </p>
+    </div>
+  )
+}
+
+function FaturasTab() {
+  const faturas = useFaturas()
+  return (
+    <div className="space-y-3">
+      <DataState
+        isLoading={faturas.isLoading}
+        error={faturas.error}
+        isEmpty={(faturas.data ?? []).length === 0}
+        emptyLabel="Nenhuma fatura ainda — elas aparecem aqui quando a cobrança começar."
+        loadingLabel="Carregando faturas…"
+      />
+      {(faturas.data ?? []).length > 0 && (
+        <Table>
+          <THead>
+            <TR>
+              <TH>Vencimento</TH>
+              <TH>Valor</TH>
+              <TH>Status</TH>
+              <TH></TH>
+            </TR>
+          </THead>
+          <TBody>
+            {faturas.data!.map((f) => (
+              <TR key={f.id}>
+                <TD className="whitespace-nowrap">{formatarVencimento(f.vencimento)}</TD>
+                <TD>{formatCurrency(f.valorCentavos / 100)}</TD>
+                <TD>{faturaBadge(f.status)}</TD>
+                <TD className="text-right">
+                  {(f.linkFatura ?? f.linkBoleto) ? (
+                    <a
+                      href={f.linkFatura ?? f.linkBoleto ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Button size="sm" variant="outline">
+                        <ExternalLink className="h-4 w-4" /> Abrir boleto
+                      </Button>
+                    </a>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem link</span>
+                  )}
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      )}
     </div>
   )
 }
@@ -331,7 +383,7 @@ function Consumo({
   const pct = ilimitado || limite === 0 ? 0 : Math.min(100, Math.round((usado / limite) * 100))
   const perto = !ilimitado && pct >= 80
   return (
-    <div className="rounded-lg border border-border/70 bg-card/40 p-4">
+    <div className="rounded-lg border bg-muted/40 p-4">
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">{titulo}</span>
         <span className="font-medium">
@@ -343,11 +395,7 @@ function Consumo({
         <div
           className={cn(
             'h-full rounded-full transition-all',
-            ilimitado
-              ? 'bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]'
-              : perto
-                ? 'bg-destructive'
-                : 'bg-primary',
+            perto ? 'bg-destructive' : 'bg-primary',
           )}
           style={{ width: ilimitado ? '100%' : `${pct}%` }}
         />

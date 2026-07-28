@@ -98,7 +98,7 @@ export function ViagemDetailPage() {
     <div>
       <PageHeader
         title={`Viagem · ${viagem.veiculo_placa}`}
-        description={viagem.motorista_nome}
+        description={`${viagem.motorista_nome}${viagem.veiculo_modelo ? ` · ${viagem.veiculo_modelo}` : ''}`}
         actions={
           <div className="flex items-center gap-2">
             <ViagemStatusBadge status={viagem.status} />
@@ -171,65 +171,61 @@ export function ViagemDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Voltar para viagens
         </Link>
 
-        {/* Resumo + mapa */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Resumo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <Info label="Veículo" value={`${viagem.veiculo_placa}${viagem.veiculo_modelo ? ` — ${viagem.veiculo_modelo}` : ''}`} />
-              <Info label="Motorista" value={viagem.motorista_nome} />
-              <Info label="Início" value={formatDateTime(viagem.iniciada_em)} />
-              <Info label="Encerramento" value={formatDateTime(viagem.encerrada_em)} />
-              <Info label="Km inicial" value={viagem.km_inicial?.toString() ?? '—'} />
-              <Info label="Km final" value={viagem.km_final?.toString() ?? '—'} />
-              <Info label="Rota planejada" value={rota?.nome ?? (viagem.rota_planejada_id ? 'Sem nome' : 'Nenhuma')} />
-              {stats && (
-                <>
-                  <p className="border-t border-border pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Resumo do trajeto (GPS)
-                  </p>
-                  <Info label="Km rodado (GPS)" value={`${stats.km.toFixed(1)} km`} />
-                  <Info label="Tempo em movimento" value={formatDuracaoMin(stats.movimentoMin)} />
-                  <Info
-                    label="Tempo parado"
-                    value={`${formatDuracaoMin(stats.paradoMin)}${
-                      stats.paradas > 0 ? ` (${stats.paradas} parada${stats.paradas > 1 ? 's' : ''})` : ''
-                    }`}
-                  />
-                  <Info
-                    label="Vel. média / máxima"
-                    value={`${Math.round(stats.velMedia)} / ${Math.round(stats.velMax)} km/h`}
-                  />
-                </>
-              )}
+        {/* Números do GPS em destaque (quando existem) */}
+        {stats && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatGps titulo="Km rodado (GPS)" valor={`${stats.km.toFixed(1)} km`} />
+            <StatGps titulo="Tempo em movimento" valor={formatDuracaoMin(stats.movimentoMin)} />
+            <StatGps
+              titulo="Tempo parado"
+              valor={`${formatDuracaoMin(stats.paradoMin)}${
+                stats.paradas > 0 ? ` (${stats.paradas} parada${stats.paradas > 1 ? 's' : ''})` : ''
+              }`}
+            />
+            <StatGps
+              titulo="Vel. média / máxima"
+              valor={`${Math.round(stats.velMedia)} / ${Math.round(stats.velMax)} km/h`}
+            />
+          </div>
+        )}
+
+        {/* Mapa em destaque, largura total */}
+        <div ref={mapaRef}>
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <Suspense fallback={<div className="h-[460px] w-full"><PageLoader label="Carregando mapa…" /></div>}>
+                <TripMap
+                  className="h-[460px] w-full"
+                  pontos={trajetoria?.pontos ?? []}
+                  linhaRuas={trajetoRuas?.linha}
+                  rota={rota?.linha}
+                  alertas={alertas}
+                  paradasDetectadas={trajetoria?.paradas_detectadas}
+                  foco={foco}
+                  erroTrajeto={trajetoriaQ.isError}
+                  onTentarNovamente={() => void trajetoriaQ.refetch()}
+                />
+              </Suspense>
             </CardContent>
           </Card>
-
-          <div ref={mapaRef} className="lg:col-span-2">
-            <Card className="overflow-hidden">
-              <CardHeader>
-                <CardTitle>Trajeto</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Suspense fallback={<div className="h-[420px] w-full"><PageLoader label="Carregando mapa…" /></div>}>
-                  <TripMap
-                    className="h-[420px] w-full"
-                    pontos={trajetoria?.pontos ?? []}
-                    linhaRuas={trajetoRuas?.linha}
-                    rota={rota?.linha}
-                    alertas={alertas}
-                    paradasDetectadas={trajetoria?.paradas_detectadas}
-                    foco={foco}
-                    erroTrajeto={trajetoriaQ.isError}
-                    onTentarNovamente={() => void trajetoriaQ.refetch()}
-                  />
-                </Suspense>
-              </CardContent>
-            </Card>
-          </div>
         </div>
+
+        {/* Dados da viagem, compactos numa linha só */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Dados da viagem</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+            <Info label="Início" value={formatDateTime(viagem.iniciada_em)} />
+            <Info label="Encerramento" value={formatDateTime(viagem.encerrada_em)} />
+            <Info label="Km inicial" value={viagem.km_inicial?.toString() ?? '—'} />
+            <Info label="Km final" value={viagem.km_final?.toString() ?? '—'} />
+            <Info
+              label="Rota planejada"
+              value={rota?.nome ?? (viagem.rota_planejada_id ? 'Sem nome' : 'Nenhuma')}
+            />
+          </CardContent>
+        </Card>
 
         {/* Paradas */}
         <section className="space-y-3">
@@ -442,9 +438,19 @@ function pontoNoTempo(
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value}</span>
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium">{value}</p>
+    </div>
+  )
+}
+
+// Cartãozinho de estatística do GPS mostrado acima do mapa.
+function StatGps({ titulo, valor }: { titulo: string; valor: string }) {
+  return (
+    <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
+      <p className="text-xs text-muted-foreground">{titulo}</p>
+      <p className="text-lg font-semibold">{valor}</p>
     </div>
   )
 }

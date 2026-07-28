@@ -203,7 +203,6 @@ function PrimeirosPassos({
 
   return (
     <Card className="relative overflow-hidden border-primary/30">
-      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]" />
       <CardContent className="space-y-4 p-5">
         <div>
           <h2 className="font-display text-lg font-bold">Primeiros passos</h2>
@@ -273,12 +272,11 @@ function Stat({
 }) {
   return (
     <Link to={to}>
-      <Card className="group relative overflow-hidden transition-all hover:border-primary/40 hover:shadow-[0_0_24px_-4px_rgba(0,212,255,0.25)]">
+      <Card className="transition-shadow hover:shadow-md">
         {/* barra de gradiente no topo — assinatura visual da Nexus */}
-        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]" />
         <CardContent className="flex items-center gap-4 p-5">
           <div
-            className={`flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-white/5 ${tone}`}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl bg-muted ${tone}`}
           >
             <Icon className="h-5 w-5" />
           </div>

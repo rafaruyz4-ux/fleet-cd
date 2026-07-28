@@ -31,9 +31,8 @@ export function EsqueciSenhaPage() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="relative w-full max-w-sm overflow-hidden">
-        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary to-[hsl(258_100%_62%)]" />
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(258_100%_62%)] text-primary-foreground shadow-[0_0_28px_rgba(0,212,255,0.45)]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             {enviado ? <MailCheck className="h-7 w-7" /> : <KeyRound className="h-7 w-7" />}
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
