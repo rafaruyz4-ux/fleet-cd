@@ -135,6 +135,10 @@ export const env = {
     timeoutMs: numberEnv('INFOSIMPLES_TIMEOUT_S', '60') * 1000,
   },
 
+  // Onde ficam arquivos baixados/gerados pelo sistema (ex.: comprovantes de
+  // consulta de débitos). Relativo ao diretório do processo por padrão.
+  arquivosDir: optional('ARQUIVOS_DIR', './arquivos'),
+
   // LGPD: por quanto tempo guardar o histórico de posições GPS antes de apagar
   // automaticamente (minimização de dados de localização).
   lgpd: {

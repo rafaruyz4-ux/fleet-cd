@@ -15,6 +15,9 @@ export interface ResultadoConsulta {
   simulado: boolean;
   multas: DebitoMulta[];
   mensagem: string;
+  /** URLs dos comprovantes da consulta (página oficial do órgão, hospedada
+   *  temporariamente pela Infosimples) — baixamos e guardamos em disco. */
+  comprovantes: string[];
 }
 
 export interface ConsultaArgs {
@@ -37,6 +40,7 @@ export function infosimplesConfigurado(): boolean {
 function simular(placa: string): ResultadoConsulta {
   return {
     simulado: true,
+    comprovantes: [],
     mensagem: 'Modo simulado (sem INFOSIMPLES_API_KEY): dados de exemplo, sem custo.',
     multas: [
       {
@@ -64,6 +68,7 @@ interface InfosimplesResposta {
   code_message?: string;
   errors?: unknown[];
   data?: Array<Record<string, unknown>>;
+  site_receipts?: string[];
 }
 
 // As datas da Infosimples vêm no formato brasileiro ("15/03/2026" ou
@@ -195,5 +200,27 @@ export async function consultarDebitosVeiculo(args: ConsultaArgs): Promise<Resul
     simulado: false,
     mensagem: json.code_message ?? 'Consulta realizada.',
     multas,
+    comprovantes: (json.site_receipts ?? []).filter((u) => typeof u === 'string' && u),
   };
+}
+
+/**
+ * Baixa um comprovante (site receipt) da Infosimples. Os links expiram em
+ * poucos dias — por isso o download acontece na hora da consulta e o arquivo
+ * fica guardado em disco. Devolve os bytes + extensão pelo content-type.
+ */
+export async function baixarComprovante(
+  url: string,
+): Promise<{ bytes: Buffer; ext: 'pdf' | 'html' }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.infosimples.timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) throw new AppError(502, `Comprovante indisponível (HTTP ${resp.status})`);
+    const tipo = resp.headers.get('content-type') ?? '';
+    const ext = tipo.includes('pdf') || url.toLowerCase().endsWith('.pdf') ? 'pdf' : 'html';
+    return { bytes: Buffer.from(await resp.arrayBuffer()), ext };
+  } finally {
+    clearTimeout(timer);
+  }
 }

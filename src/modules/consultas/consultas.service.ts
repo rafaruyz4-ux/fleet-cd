@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
 import { query, queryOne, withTransaction } from '../../db/pool';
@@ -5,6 +7,7 @@ import { MontadorWhere } from '../../db/sql';
 import { PLANOS, type PlanoFaixa } from '../../domain/planos';
 import { env } from '../../config/env';
 import {
+  baixarComprovante,
   consultarDebitosVeiculo,
   infosimplesConfigurado,
 } from '../../integrations/infosimples/client';
@@ -169,11 +172,12 @@ export async function consultarVeiculo(
     // O INSERT roda no client da transação: quem estiver esperando o lock só
     // recontará o consumo depois que esta linha estiver commitada.
     const custo = resultado.simulado ? 0 : env.infosimples.custoCentavos;
-    await client.query(
+    const ins = await client.query<{ id: string }>(
       `INSERT INTO consultas_infosimples
          (empresa_id, veiculo_id, placa, tipo, status, simulado, custo_centavos,
           multas_encontradas, multas_novas, mensagem)
-       VALUES ($1, $2, $3, 'debitos', $4, $5, $6, $7, $8, $9)`,
+       VALUES ($1, $2, $3, 'debitos', $4, $5, $6, $7, $8, $9)
+       RETURNING id`,
       [
         empresaId,
         veiculoId,
@@ -188,15 +192,65 @@ export async function consultarVeiculo(
     );
 
     return {
-      simulado: resultado.simulado,
-      mensagem: resultado.mensagem,
-      placa: veiculo.placa,
-      multasEncontradas: resultado.multas.length,
-      multasNovas: novas,
-      multasDuplicadas: duplicadas,
-      consumo: await consumoDoMes(empresaId, client),
+      consultaId: ins.rows[0]!.id,
+      comprovantes: resultado.comprovantes,
+      numeroAutos: resultado.multas.map((m) => m.numero_auto),
+      resposta: {
+        simulado: resultado.simulado,
+        mensagem: resultado.mensagem,
+        placa: veiculo.placa,
+        multasEncontradas: resultado.multas.length,
+        multasNovas: novas,
+        multasDuplicadas: duplicadas,
+        consumo: await consumoDoMes(empresaId, client),
+      } satisfies ResultadoConsultaVeiculo,
     };
+  }).then(async ({ consultaId, comprovantes, numeroAutos, resposta }) => {
+    // Depois do commit (as multas já existem no banco): baixa o comprovante e
+    // liga as multas à consulta. Best-effort — falha aqui não desfaz a consulta.
+    await salvarComprovanteDaConsulta(empresaId, consultaId, comprovantes, numeroAutos);
+    return resposta;
   });
+}
+
+/**
+ * Baixa o comprovante da consulta (a página oficial do órgão, que a
+ * Infosimples hospeda por poucos dias) e o guarda em disco para sempre;
+ * as multas da consulta passam a apontar para ele (botão "Comprovante").
+ */
+async function salvarComprovanteDaConsulta(
+  empresaId: string,
+  consultaId: string,
+  urls: string[],
+  numeroAutos: string[],
+): Promise<void> {
+  const url = urls[0];
+  if (!url) return;
+  try {
+    const { bytes, ext } = await baixarComprovante(url);
+    const relativo = `comprovantes/${empresaId}/${consultaId}.${ext}`;
+    const absoluto = path.resolve(env.arquivosDir, relativo);
+    await fs.mkdir(path.dirname(absoluto), { recursive: true });
+    await fs.writeFile(absoluto, bytes);
+    await query('UPDATE consultas_infosimples SET comprovante_path = $1 WHERE id = $2', [
+      relativo,
+      consultaId,
+    ]);
+    if (numeroAutos.length > 0) {
+      // Cobre novas E duplicadas: a multa sempre aponta para o comprovante
+      // mais recente que a confirmou no órgão.
+      await query(
+        `UPDATE multas SET consulta_id = $1
+          WHERE empresa_id = $2 AND fonte = 'infosimples' AND numero_auto = ANY($3)`,
+        [consultaId, empresaId, numeroAutos],
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[consultas] comprovante da consulta ${consultaId} não pôde ser salvo:`,
+      (err as Error).message,
+    );
+  }
 }
 
 // ----- histórico de consultas (o contador, detalhado) -----

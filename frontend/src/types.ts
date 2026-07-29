@@ -290,4 +290,6 @@ export interface Multa {
   updated_at: string
   veiculo_placa: string | null
   motorista_nome: string | null
+  /** Extensão do comprovante da consulta que achou a multa (null = sem). */
+  comprovante_ext: 'pdf' | 'html' | null
 }

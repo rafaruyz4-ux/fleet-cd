@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Download, ExternalLink, Link2, Plus, Radar, Search } from 'lucide-react'
+import { Download, ExternalLink, FileText, Link2, Plus, Radar, Search } from 'lucide-react'
+import type { Multa } from '@/types'
 import {
   useConsultarVeiculo,
   useMultaMutations,
@@ -95,6 +96,20 @@ export function MultasPage() {
   const reset = (fn: () => void) => {
     fn()
     setOffset(0)
+  }
+
+  // Baixa o comprovante oficial da consulta que encontrou a multa.
+  async function baixarComprovante(m: Multa) {
+    try {
+      await baixarArquivo(
+        `/multas/${m.id}/comprovante`,
+        `comprovante-${m.numero_auto ?? m.id}.${m.comprovante_ext ?? 'pdf'}`,
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : 'Não foi possível baixar o comprovante.',
+      )
+    }
   }
 
   // Exporta com os mesmos filtros aplicados na tela (download autenticado).
@@ -264,6 +279,16 @@ export function MultasPage() {
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">
+                        {m.comprovante_ext && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Baixar o comprovante oficial da consulta (prova de que a multa existe no órgão)"
+                            onClick={() => baixarComprovante(m)}
+                          >
+                            <FileText className="h-4 w-4" /> Comprovante
+                          </Button>
+                        )}
                         {m.viagem_id ? (
                           <Link to={`/viagens/${m.viagem_id}`}>
                             <Button size="sm" variant="ghost">

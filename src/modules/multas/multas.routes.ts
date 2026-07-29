@@ -60,6 +60,21 @@ multasRouter.patch(
   }),
 );
 
+// Baixa o comprovante da consulta que encontrou a multa (PDF/HTML oficial).
+multasRouter.get(
+  '/:id/comprovante',
+  validate({ params: idParamSchema }),
+  asyncHandler(async (req, res) => {
+    const { arquivo, nome } = await service.comprovante(tenantId(req), req.params.id!);
+    res.download(arquivo, nome, (err) => {
+      // Arquivo sumiu do disco (ex.: pasta apagada): devolve 404 limpo.
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: 'Arquivo do comprovante não encontrado no servidor' });
+      }
+    });
+  }),
+);
+
 // Re-roda o vínculo automático (viagem/motorista) para a multa.
 multasRouter.post(
   '/:id/revincular',

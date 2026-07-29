@@ -19,6 +19,9 @@ certs/
 storage/
 tmp/
 
+# Arquivos baixados/gerados (comprovantes de consulta etc.)
+arquivos/
+
 # Editores / SO
 .DS_Store
 .idea/

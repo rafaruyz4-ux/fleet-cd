@@ -1,5 +1,7 @@
+import path from 'node:path';
 import type { PoolClient } from 'pg';
 import { AppError } from '../../errors/AppError';
+import { env } from '../../config/env';
 import { query, queryOne, withTransaction } from '../../db/pool';
 import { MontadorUpdate, MontadorWhere } from '../../db/sql';
 import type {
@@ -30,6 +32,7 @@ interface MultaRow {
   updated_at: string;
   veiculo_placa: string | null;
   motorista_nome: string | null;
+  comprovante_ext: 'pdf' | 'html' | null;
 }
 
 export interface Multa {
@@ -51,6 +54,8 @@ export interface Multa {
   updated_at: string;
   veiculo_placa: string | null;
   motorista_nome: string | null;
+  /** Extensão do comprovante da consulta que achou a multa (null = sem). */
+  comprovante_ext: 'pdf' | 'html' | null;
 }
 
 const SELECT_COLS = `
@@ -60,12 +65,16 @@ const SELECT_COLS = `
   ST_X(m.coordenada::geometry) AS lng,
   m.numero_auto, m.fonte, m.status_pagamento, m.status_revisao,
   m.criado_em, m.updated_at,
-  ve.placa AS veiculo_placa, mo.nome AS motorista_nome
+  ve.placa AS veiculo_placa, mo.nome AS motorista_nome,
+  CASE WHEN ci.comprovante_path IS NULL THEN NULL
+       WHEN ci.comprovante_path LIKE '%.html' THEN 'html'
+       ELSE 'pdf' END AS comprovante_ext
 `;
 const FROM = `
   FROM multas m
   LEFT JOIN veiculos ve ON ve.id = m.veiculo_id
   LEFT JOIN motoristas mo ON mo.id = m.motorista_id
+  LEFT JOIN consultas_infosimples ci ON ci.id = m.consulta_id
 `;
 
 function toMulta(row: MultaRow): Multa {
@@ -403,4 +412,30 @@ export async function remove(empresaId: string, id: string): Promise<void> {
     [id, empresaId],
   );
   if (!row) throw AppError.notFound('Multa não encontrada');
+}
+
+/**
+ * Comprovante da consulta que encontrou/confirmou a multa (página oficial do
+ * órgão salva em disco na hora da consulta). Devolve o caminho absoluto do
+ * arquivo + nome amigável para download.
+ */
+export async function comprovante(
+  empresaId: string,
+  id: string,
+): Promise<{ arquivo: string; nome: string }> {
+  const row = await queryOne<{ comprovante_path: string | null; numero_auto: string | null }>(
+    `SELECT ci.comprovante_path, m.numero_auto
+       FROM multas m
+       JOIN consultas_infosimples ci ON ci.id = m.consulta_id
+      WHERE m.id = $1 AND m.empresa_id = $2`,
+    [id, empresaId],
+  );
+  if (!row?.comprovante_path) {
+    throw AppError.notFound('Esta multa não tem comprovante de consulta anexado');
+  }
+  const ext = row.comprovante_path.endsWith('.html') ? 'html' : 'pdf';
+  return {
+    arquivo: path.resolve(env.arquivosDir, row.comprovante_path),
+    nome: `comprovante-${row.numero_auto ?? id}.${ext}`,
+  };
 }
