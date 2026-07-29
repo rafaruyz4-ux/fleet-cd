@@ -10,7 +10,9 @@ import {
   baixarComprovante,
   consultarDebitosVeiculo,
   infosimplesConfigurado,
+  type ResultadoConsulta,
 } from '../../integrations/infosimples/client';
+import { gerarPdfComprovante, nomeDaFonte } from './comprovante-pdf';
 import * as multasService from '../multas/multas.service';
 import type { ListConsultasQuery } from './consultas.schemas';
 
@@ -175,8 +177,8 @@ export async function consultarVeiculo(
     const ins = await client.query<{ id: string }>(
       `INSERT INTO consultas_infosimples
          (empresa_id, veiculo_id, placa, tipo, status, simulado, custo_centavos,
-          multas_encontradas, multas_novas, mensagem)
-       VALUES ($1, $2, $3, 'debitos', $4, $5, $6, $7, $8, $9)
+          multas_encontradas, multas_novas, mensagem, resposta)
+       VALUES ($1, $2, $3, 'debitos', $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         empresaId,
@@ -188,13 +190,14 @@ export async function consultarVeiculo(
         resultado.multas.length,
         novas,
         resultado.mensagem,
+        JSON.stringify(resultado.dadosBrutos),
       ],
     );
 
     return {
       consultaId: ins.rows[0]!.id,
-      comprovantes: resultado.comprovantes,
-      numeroAutos: resultado.multas.map((m) => m.numero_auto),
+      veiculo,
+      resultado,
       resposta: {
         simulado: resultado.simulado,
         mensagem: resultado.mensagem,
@@ -205,37 +208,48 @@ export async function consultarVeiculo(
         consumo: await consumoDoMes(empresaId, client),
       } satisfies ResultadoConsultaVeiculo,
     };
-  }).then(async ({ consultaId, comprovantes, numeroAutos, resposta }) => {
-    // Depois do commit (as multas já existem no banco): baixa o comprovante e
-    // liga as multas à consulta. Best-effort — falha aqui não desfaz a consulta.
-    await salvarComprovanteDaConsulta(empresaId, consultaId, comprovantes, numeroAutos);
+  }).then(async ({ consultaId, veiculo, resultado, resposta }) => {
+    // Depois do commit (as multas já existem no banco): gera o comprovante em
+    // PDF e liga as multas à consulta. Best-effort — falha não desfaz a consulta.
+    await salvarComprovanteDaConsulta(empresaId, consultaId, veiculo, resultado);
     return resposta;
   });
 }
 
 /**
- * Baixa o comprovante da consulta (a página oficial do órgão, que a
- * Infosimples hospeda por poucos dias) e o guarda em disco para sempre;
- * as multas da consulta passam a apontar para ele (botão "Comprovante").
+ * Gera o comprovante em PDF (documento limpo do VETRA com a resposta oficial
+ * do órgão), guarda em disco e aponta as multas da consulta para ele. O "site
+ * receipt" da Infosimples (HTML técnico, link expira em dias) fica salvo ao
+ * lado apenas como via de auditoria.
  */
 async function salvarComprovanteDaConsulta(
   empresaId: string,
   consultaId: string,
-  urls: string[],
-  numeroAutos: string[],
+  veiculo: { placa: string; renavam: string | null },
+  resultado: ResultadoConsulta,
 ): Promise<void> {
-  const url = urls[0];
-  if (!url) return;
   try {
-    const { bytes, ext } = await baixarComprovante(url);
-    const relativo = `comprovantes/${empresaId}/${consultaId}.${ext}`;
+    const pdf = await gerarPdfComprovante({
+      consultaId,
+      fonte: nomeDaFonte(env.infosimples.endpoint),
+      simulado: resultado.simulado,
+      mensagem: resultado.mensagem,
+      consultadoEm: new Date(),
+      placa: veiculo.placa,
+      renavam: veiculo.renavam,
+      dadosVeiculo: resultado.dadosBrutos[0] ?? {},
+      multas: resultado.multas,
+    });
+    const relativo = `comprovantes/${empresaId}/${consultaId}.pdf`;
     const absoluto = path.resolve(env.arquivosDir, relativo);
     await fs.mkdir(path.dirname(absoluto), { recursive: true });
-    await fs.writeFile(absoluto, bytes);
+    await fs.writeFile(absoluto, pdf);
     await query('UPDATE consultas_infosimples SET comprovante_path = $1 WHERE id = $2', [
       relativo,
       consultaId,
     ]);
+
+    const numeroAutos = resultado.multas.map((m) => m.numero_auto);
     if (numeroAutos.length > 0) {
       // Cobre novas E duplicadas: a multa sempre aponta para o comprovante
       // mais recente que a confirmou no órgão.
@@ -244,6 +258,20 @@ async function salvarComprovanteDaConsulta(
           WHERE empresa_id = $2 AND fonte = 'infosimples' AND numero_auto = ANY($3)`,
         [consultaId, empresaId, numeroAutos],
       );
+    }
+
+    // Receipt original da Infosimples (auditoria) — melhor esforço.
+    const url = resultado.comprovantes[0];
+    if (url) {
+      try {
+        const { bytes, ext } = await baixarComprovante(url);
+        await fs.writeFile(
+          path.resolve(env.arquivosDir, `comprovantes/${empresaId}/${consultaId}-original.${ext}`),
+          bytes,
+        );
+      } catch {
+        // sem receipt original não tem problema: o PDF gerado é o principal.
+      }
     }
   } catch (err) {
     console.warn(

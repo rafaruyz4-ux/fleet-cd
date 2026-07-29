@@ -18,6 +18,9 @@ export interface ResultadoConsulta {
   /** URLs dos comprovantes da consulta (página oficial do órgão, hospedada
    *  temporariamente pela Infosimples) — baixamos e guardamos em disco. */
   comprovantes: string[];
+  /** Resposta bruta do órgão (data[] da Infosimples): auditoria e base do
+   *  comprovante em PDF gerado pelo sistema. */
+  dadosBrutos: Array<Record<string, unknown>>;
 }
 
 export interface ConsultaArgs {
@@ -41,6 +44,7 @@ function simular(placa: string): ResultadoConsulta {
   return {
     simulado: true,
     comprovantes: [],
+    dadosBrutos: [{ placa, observacao: 'Dados de exemplo do modo simulado (sem custo)' }],
     mensagem: 'Modo simulado (sem INFOSIMPLES_API_KEY): dados de exemplo, sem custo.',
     multas: [
       {
@@ -201,6 +205,7 @@ export async function consultarDebitosVeiculo(args: ConsultaArgs): Promise<Resul
     mensagem: json.code_message ?? 'Consulta realizada.',
     multas,
     comprovantes: (json.site_receipts ?? []).filter((u) => typeof u === 'string' && u),
+    dadosBrutos: json.data ?? [],
   };
 }
 
