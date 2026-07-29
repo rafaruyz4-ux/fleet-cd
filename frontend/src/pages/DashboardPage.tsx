@@ -273,7 +273,6 @@ function Stat({
   return (
     <Link to={to}>
       <Card className="transition-shadow hover:shadow-md">
-        {/* barra de gradiente no topo — assinatura visual da Nexus */}
         <CardContent className="flex items-center gap-4 p-5">
           <div
             className={`flex h-11 w-11 items-center justify-center rounded-xl bg-muted ${tone}`}

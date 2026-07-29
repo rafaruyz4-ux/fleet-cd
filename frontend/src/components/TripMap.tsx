@@ -223,13 +223,13 @@ export function TripMap({
           'line-opacity': 0.8,
         },
       })
-      // Contorno claro sob o trajeto: destaca a linha sobre o mapa claro.
+      // Contorno escuro sob o trajeto: separa a linha dos rótulos do mapa.
       map.addLayer({
         id: 'trajeto-glow',
         type: 'line',
         source: 'trajeto',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.9 },
+        paint: { 'line-color': '#0A0E14', 'line-width': 9, 'line-opacity': 0.85 },
       })
       // Trajeto principal em azul sóbrio.
       map.addLayer({
@@ -244,9 +244,9 @@ export function TripMap({
             ['linear'],
             ['line-progress'],
             0,
-            '#2757c4',
+            '#2D6BFF',
             1,
-            '#2757c4',
+            '#2D6BFF',
           ],
         },
       })
@@ -376,13 +376,13 @@ export function TripMap({
       {erroTrajeto ? (
         // ERRO ≠ VAZIO: se a busca do trajeto falhou, avisa e oferece repetir.
         <div className="absolute inset-x-0 top-3 z-10 flex justify-center">
-          <div className="flex items-center gap-2 rounded-full border border-red-200 bg-white/95 px-3 py-1.5 text-xs font-medium text-red-700 shadow-md">
+          <div className="flex items-center gap-2 rounded-full border border-red-500/40 bg-[#12161E]/90 px-3 py-1.5 text-xs font-medium text-red-400 shadow-md backdrop-blur">
             Erro ao carregar o trajeto.
             {onTentarNovamente && (
               <button
                 type="button"
                 onClick={onTentarNovamente}
-                className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 transition-colors hover:bg-red-200"
+                className="rounded-full bg-red-500/20 px-2 py-0.5 font-semibold text-red-300 transition-colors hover:bg-red-500/30"
               >
                 Tentar de novo
               </button>
@@ -392,7 +392,7 @@ export function TripMap({
       ) : (
         semTrajeto && (
           <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
-            <div className="rounded-full border bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-md">
+            <div className="rounded-full border bg-[#12161E]/90 px-3 py-1.5 text-xs font-medium text-slate-300 shadow-md backdrop-blur">
               Sem trajeto GPS ainda — aparece aqui quando o motorista enviar a localização.
             </div>
           </div>
@@ -409,8 +409,8 @@ export function TripMap({
             className={cn(
               'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors',
               seguirRuas
-                ? 'border-blue-300 bg-blue-50 text-blue-700'
-                : 'bg-white/95 text-slate-600 hover:text-slate-900',
+                ? 'border-blue-500/50 bg-blue-500/15 text-blue-300'
+                : 'bg-[#12161E]/90 text-slate-400 hover:text-slate-100',
             )}
           >
             <Route className="h-3.5 w-3.5" /> Seguir ruas
@@ -421,7 +421,7 @@ export function TripMap({
             type="button"
             onClick={() => recentrarRef.current?.()}
             title="Recentralizar o mapa no trajeto"
-            className="flex items-center gap-1.5 rounded-lg border bg-white/95 px-2.5 py-1.5 text-xs font-medium text-slate-600 shadow-md transition-colors hover:text-slate-900"
+            className="flex items-center gap-1.5 rounded-lg border bg-[#12161E]/90 px-2.5 py-1.5 text-xs font-medium text-slate-400 shadow-md backdrop-blur transition-colors hover:text-slate-100"
           >
             <Crosshair className="h-3.5 w-3.5" /> Recentralizar
           </button>
@@ -436,7 +436,7 @@ export function TripMap({
 // Legenda flutuante no canto inferior esquerdo.
 function MapaLegenda() {
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg">
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border bg-[#12161E]/90 px-3 py-2 text-xs text-slate-300 shadow-lg backdrop-blur">
       <ul className="space-y-1">
         <li className="flex items-center gap-2">
           <span className="flex w-4 overflow-hidden rounded-full">
@@ -447,7 +447,7 @@ function MapaLegenda() {
           Velocidade ≤60 · 60–90 · &gt;90 km/h
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-slate-500" />
+          <span className="h-0.5 w-4 rounded-full border-t-2 border-dashed border-slate-400" />
           Rota planejada
         </li>
         <li className="flex items-center gap-2">

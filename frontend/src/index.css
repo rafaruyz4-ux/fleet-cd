@@ -8,57 +8,58 @@
  * Design tokens (estilo shadcn/ui) expostos como CSS vars e mapeados para
  * utilitários Tailwind v4 via @theme inline.
  *
- * Tema: CLARO E LIMPO — fundo cinza-claro, superfícies brancas e azul sóbrio
- * como cor de ação. Substituiu o tema escuro neon em 28/07/2026.
+ * Tema: ESCURO VETRA (rebranding 29/07/2026) — paleta do board da marca:
+ * fundo #0A0E14, superfícies #16181D, azul de ação #2D6BFF, texto #F5F7FA,
+ * apoio #8B919A. Sóbrio, sem neon/glow.
  */
 :root {
-  --background: hsl(220 25% 97%);
-  --foreground: hsl(224 35% 14%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(224 35% 14%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(224 35% 14%);
-  --primary: hsl(221 64% 44%);
+  --background: hsl(216 33% 6%);
+  --foreground: hsl(216 33% 97%);
+  --card: hsl(219 20% 10%);
+  --card-foreground: hsl(216 33% 97%);
+  --popover: hsl(219 20% 10%);
+  --popover-foreground: hsl(216 33% 97%);
+  --primary: hsl(222 100% 59%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(220 20% 94%);
-  --secondary-foreground: hsl(224 35% 14%);
-  --muted: hsl(220 20% 94%);
-  --muted-foreground: hsl(220 12% 44%);
-  --accent: hsl(221 70% 96%);
-  --accent-foreground: hsl(221 64% 38%);
-  --destructive: hsl(0 68% 46%);
+  --secondary: hsl(219 18% 14%);
+  --secondary-foreground: hsl(216 33% 97%);
+  --muted: hsl(219 16% 13%);
+  --muted-foreground: hsl(216 8% 58%);
+  --accent: hsl(222 55% 17%);
+  --accent-foreground: hsl(221 100% 78%);
+  --destructive: hsl(0 72% 56%);
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(150 65% 33%);
-  --warning: hsl(32 90% 40%);
-  --border: hsl(220 16% 88%);
-  --input: hsl(220 16% 84%);
-  --ring: hsl(221 64% 44%);
+  --success: hsl(150 55% 45%);
+  --warning: hsl(35 92% 55%);
+  --border: hsl(218 12% 20%);
+  --input: hsl(218 12% 24%);
+  --ring: hsl(222 100% 59%);
   --radius: 0.625rem;
 }
 
 /* Mantém o mesmo tema mesmo se a classe .dark for aplicada. */
 .dark {
-  --background: hsl(220 25% 97%);
-  --foreground: hsl(224 35% 14%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(224 35% 14%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(224 35% 14%);
-  --primary: hsl(221 64% 44%);
+  --background: hsl(216 33% 6%);
+  --foreground: hsl(216 33% 97%);
+  --card: hsl(219 20% 10%);
+  --card-foreground: hsl(216 33% 97%);
+  --popover: hsl(219 20% 10%);
+  --popover-foreground: hsl(216 33% 97%);
+  --primary: hsl(222 100% 59%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(220 20% 94%);
-  --secondary-foreground: hsl(224 35% 14%);
-  --muted: hsl(220 20% 94%);
-  --muted-foreground: hsl(220 12% 44%);
-  --accent: hsl(221 70% 96%);
-  --accent-foreground: hsl(221 64% 38%);
-  --destructive: hsl(0 68% 46%);
+  --secondary: hsl(219 18% 14%);
+  --secondary-foreground: hsl(216 33% 97%);
+  --muted: hsl(219 16% 13%);
+  --muted-foreground: hsl(216 8% 58%);
+  --accent: hsl(222 55% 17%);
+  --accent-foreground: hsl(221 100% 78%);
+  --destructive: hsl(0 72% 56%);
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(150 65% 33%);
-  --warning: hsl(32 90% 40%);
-  --border: hsl(220 16% 88%);
-  --input: hsl(220 16% 84%);
-  --ring: hsl(221 64% 44%);
+  --success: hsl(150 55% 45%);
+  --warning: hsl(35 92% 55%);
+  --border: hsl(218 12% 20%);
+  --input: hsl(218 12% 24%);
+  --ring: hsl(222 100% 59%);
 }
 
 @theme inline {
@@ -101,13 +102,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Shimmer dos skeletons de carregamento (varredura clara sobre o tom muted). */
+/* Shimmer dos skeletons de carregamento (varredura sutil sobre o tom muted). */
 .skeleton-shimmer {
   background: linear-gradient(
     100deg,
-    hsl(220 20% 92%) 40%,
-    hsl(220 20% 96%) 50%,
-    hsl(220 20% 92%) 60%
+    hsl(219 16% 13%) 40%,
+    hsl(219 16% 18%) 50%,
+    hsl(219 16% 13%) 60%
   );
   background-size: 200% 100%;
   animation: skeleton-sweep 1.4s linear infinite;

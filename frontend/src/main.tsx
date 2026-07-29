@@ -43,10 +43,10 @@ createRoot(document.getElementById('root')!).render(
             closeButton
             toastOptions={{
               style: {
-                background: 'hsl(220 42% 9% / 0.92)',
+                background: 'hsl(219 20% 10% / 0.94)',
                 backdropFilter: 'blur(12px)',
-                border: '1px solid hsl(205 38% 20%)',
-                color: 'hsl(210 100% 96%)',
+                border: '1px solid hsl(218 12% 22%)',
+                color: 'hsl(216 33% 97%)',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
               },
             }}

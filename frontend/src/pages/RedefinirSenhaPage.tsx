@@ -55,7 +55,7 @@ export function RedefinirSenhaPage() {
             {ok ? <CheckCircle2 className="h-7 w-7" /> : <ShieldCheck className="h-7 w-7" />}
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
-            Nexus Orbital
+            VETRA
           </div>
           <CardTitle className="font-display text-2xl">
             {ok ? 'Senha redefinida' : 'Criar nova senha'}

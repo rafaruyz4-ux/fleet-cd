@@ -11,7 +11,6 @@ import {
   Receipt,
   Route as RouteIcon,
   Settings,
-  Truck,
   UserCog,
   Users,
   X,
@@ -21,6 +20,7 @@ import { useAssinaturaSuspensa } from '@/lib/assinatura-suspensa'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TrocarSenhaModal } from '@/components/TrocarSenhaModal'
+import { VetraLogo } from '@/components/Logo'
 
 type NavItem = {
   to: string
@@ -47,21 +47,7 @@ const NAV_ADMIN: NavItem[] = [
 const NAV_SUPER: NavItem[] = [{ to: '/bastidores', label: 'Bastidores', icon: Building2 }]
 
 function Logo() {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-        <Truck className="h-5 w-5" />
-      </div>
-      <div className="leading-tight">
-        <div className="font-display text-base font-bold">
-          Frota<span className="text-primary"> CD</span>
-        </div>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Nexus Orbital
-        </div>
-      </div>
-    </div>
-  )
+  return <VetraLogo />
 }
 
 /** Conteúdo da sidebar (compartilhado entre a fixa do desktop e o drawer). */

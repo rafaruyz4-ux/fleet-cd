@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Truck } from 'lucide-react'
+import { VetraMark } from '@/components/Logo'
 import { useAuth } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 
 export function LoginPage() {
@@ -38,13 +38,11 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="relative w-full max-w-sm overflow-hidden">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-            <Truck className="h-7 w-7" />
-          </div>
+          <VetraMark className="mx-auto h-14 w-14" />
+          <div className="font-display text-xl font-extrabold tracking-[0.3em]">VETRA</div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
-            Nexus Orbital
+            Inteligência em Movimento
           </div>
-          <CardTitle className="font-display text-2xl">Gestão de Frota</CardTitle>
           <CardDescription>Painel do gestor — entre com suas credenciais</CardDescription>
         </CardHeader>
         <CardContent>
