@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "VETRA Motorista",
+    "slug": "vetra-motorista",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0E14",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E14"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.vetrafrotas.motorista"
+    },
+    "android": {
+      "package": "br.com.vetrafrotas.motorista",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0E14",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "O VETRA usa sua localização para acompanhar a viagem em andamento, inclusive com a tela bloqueada.",
+          "locationAlwaysPermission": "O VETRA usa sua localização para acompanhar a viagem em andamento, inclusive com a tela bloqueada.",
+          "locationWhenInUsePermission": "O VETRA usa sua localização para acompanhar a viagem em andamento."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
