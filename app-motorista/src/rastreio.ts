@@ -108,7 +108,7 @@ export async function iniciarRastreio(): Promise<void> {
     // Com a tela bloqueada o Android entrega os pontos em rajadas de ~10s.
     deferredUpdatesInterval: 10000,
     foregroundService: {
-      notificationTitle: 'VETRA — viagem em andamento',
+      notificationTitle: 'Nexus Frota — viagem em andamento',
       notificationBody: 'Sua localização está sendo enviada para a central.',
       notificationColor: '#2D6BFF',
     },

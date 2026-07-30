@@ -39,7 +39,7 @@ export function LoginPage() {
       <Card className="relative w-full max-w-sm overflow-hidden">
         <CardHeader className="space-y-3 text-center">
           <VetraMark className="mx-auto h-14 w-14" />
-          <div className="font-display text-xl font-extrabold tracking-[0.3em]">VETRA</div>
+          <div className="font-display text-xl font-extrabold tracking-[0.2em]">NEXUS FROTA</div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
             Inteligência em Movimento
           </div>

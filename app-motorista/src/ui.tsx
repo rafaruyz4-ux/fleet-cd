@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { cores } from './theme';
 
-/** Componentes básicos no visual VETRA (bordas suaves, sem neon). */
+/** Componentes básicos no visual NEXUS FROTA (bordas suaves, sem neon). */
 
 export function Cartao({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return <View style={[estilos.cartao, style]}>{children}</View>;

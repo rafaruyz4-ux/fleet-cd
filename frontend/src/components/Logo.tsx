@@ -1,7 +1,8 @@
 /**
- * Marca VETRA (rebranding de 29/07/2026): "V" geométrico cujo braço direito é
- * um "7" — símbolo recriado em vetor a partir do board de inspiração, nas
- * cores da paleta oficial (azul #2D6BFF + claro #F5F7FA sobre escuro #0A0E14).
+ * Marca NEXUS FROTA (nome trocado em 30/07/2026; era VETRA): "V" geométrico
+ * cujo braço direito é um "7" — símbolo recriado em vetor a partir do board de
+ * inspiração, nas cores da paleta oficial (azul #2D6BFF + claro #F5F7FA sobre
+ * escuro #0A0E14). Só o nome mudou; símbolo e cores ficaram.
  */
 export const VETRA_AZUL = '#2D6BFF'
 export const VETRA_CLARO = '#F5F7FA'
@@ -30,8 +31,8 @@ export function VetraLogo() {
     <div className="flex items-center gap-2.5">
       <VetraMark className="h-8 w-8 shrink-0" />
       <div className="leading-tight">
-        <div className="font-display text-base font-extrabold tracking-[0.22em] text-foreground">
-          VETRA
+        <div className="whitespace-nowrap font-display text-base font-extrabold tracking-[0.14em] text-foreground">
+          NEXUS FROTA
         </div>
         <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Inteligência em Movimento

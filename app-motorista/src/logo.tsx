@@ -3,8 +3,8 @@ import Svg, { Path } from 'react-native-svg';
 import { cores } from './theme';
 
 /**
- * Marca VETRA portada do dashboard (frontend/src/components/Logo.tsx):
- * "V" geométrico cujo braço direito é um "7".
+ * Marca NEXUS FROTA portada do dashboard (frontend/src/components/Logo.tsx):
+ * símbolo "V" geométrico cujo braço direito é um "7" (mantido do rebranding).
  */
 export function VetraMark({ size = 32 }: { size?: number }) {
   return (
@@ -21,7 +21,7 @@ export function VetraLogo({ size = 34 }: { size?: number }) {
     <View style={estilos.linha}>
       <VetraMark size={size} />
       <View>
-        <Text style={estilos.nome}>VETRA</Text>
+        <Text style={estilos.nome}>NEXUS FROTA</Text>
         <Text style={estilos.tagline}>Inteligência em Movimento</Text>
       </View>
     </View>

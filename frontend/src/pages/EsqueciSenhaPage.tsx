@@ -36,7 +36,7 @@ export function EsqueciSenhaPage() {
             {enviado ? <MailCheck className="h-7 w-7" /> : <KeyRound className="h-7 w-7" />}
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-primary">
-            VETRA
+            NEXUS FROTA
           </div>
           <CardTitle className="font-display text-2xl">
             {enviado ? 'Verifique seu e-mail' : 'Recuperar senha'}

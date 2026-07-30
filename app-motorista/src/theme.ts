@@ -1,5 +1,5 @@
 /**
- * Paleta VETRA (mesma do dashboard): escuro sóbrio + azul, sem neon.
+ * Paleta NEXUS FROTA (mesma do dashboard): escuro sóbrio + azul, sem neon.
  */
 export const cores = {
   fundo: '#0A0E14',

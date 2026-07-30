@@ -56,11 +56,11 @@ export function RastreioScreen({
     try {
       const permissao = await pedirPermissoes();
       if (permissao === 'sem_permissao') {
-        setErro('Sem permissão de localização. Vá em Configurações > Apps > VETRA e permita a localização.');
+        setErro('Sem permissão de localização. Vá em Configurações > Apps > Nexus Frota e permita a localização.');
         return;
       }
       if (permissao === 'sem_segundo_plano') {
-        setErro('Para funcionar com a tela bloqueada, escolha "Permitir o tempo todo" na permissão de localização (Configurações > Apps > VETRA > Permissões > Localização).');
+        setErro('Para funcionar com a tela bloqueada, escolha "Permitir o tempo todo" na permissão de localização (Configurações > Apps > Nexus Frota > Permissões > Localização).');
         return;
       }
       await iniciarRastreio();
@@ -123,7 +123,7 @@ export function RastreioScreen({
 
       <Text style={estilos.dica}>
         Com o rastreio ligado pode bloquear a tela e guardar o celular: o envio continua sozinho.
-        A notificação fixa "VETRA" mostra que está funcionando.
+        A notificação fixa "Nexus Frota" mostra que está funcionando.
       </Text>
     </ScrollView>
   );

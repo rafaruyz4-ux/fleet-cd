@@ -64,7 +64,7 @@ export function LoginScreen({ aoEntrar }: { aoEntrar: () => void }) {
       >
         <View style={estilos.topo}>
           <VetraMark size={72} />
-          <Text style={estilos.titulo}>VETRA</Text>
+          <Text style={estilos.titulo}>NEXUS FROTA</Text>
           <Text style={estilos.subtitulo}>App do Motorista</Text>
         </View>
 

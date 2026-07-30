@@ -79,7 +79,7 @@ export function gerarPdfComprovante(d: DadosComprovante): Promise<Buffer> {
     };
 
     // ---- Cabeçalho ----
-    doc.font('Helvetica-Bold').fontSize(24).fillColor(AZUL).text('VETRA');
+    doc.font('Helvetica-Bold').fontSize(24).fillColor(AZUL).text('NEXUS FROTA');
     doc
       .font('Helvetica')
       .fontSize(8)
@@ -152,7 +152,7 @@ export function gerarPdfComprovante(d: DadosComprovante): Promise<Buffer> {
       .fontSize(8)
       .fillColor(CINZA)
       .text(
-        `Documento gerado automaticamente pelo VETRA em ${dataHoraBr(new Date())}, ` +
+        `Documento gerado automaticamente pelo Nexus Frota em ${dataHoraBr(new Date())}, ` +
           'a partir da resposta oficial do órgão de trânsito obtida via Infosimples. ' +
           'A resposta bruta da consulta fica arquivada no sistema para auditoria.',
         { width: larguraUtil },

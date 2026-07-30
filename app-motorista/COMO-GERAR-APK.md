@@ -1,4 +1,4 @@
-# Como gerar o APK do VETRA Motorista
+﻿# Como gerar o APK do Nexus Frota
 
 O APK é o arquivo que instala o app no celular dos motoristas (sem Play Store).
 Ele é montado na nuvem do Expo (serviço EAS Build, plano grátis).
@@ -37,7 +37,7 @@ npm run apk
 ## 4. No celular do motorista
 
 1. Instalar o APK.
-2. Abrir o app VETRA Motorista.
+2. Abrir o app Nexus Frota.
 3. Na primeira tela, tocar em "Endereço do servidor" e digitar o endereço
    que o gestor passar (ex.: o túnel https do servidor ou o IP da rede).
 4. Entrar com CPF e a senha cadastrada no sistema.
@@ -47,7 +47,7 @@ npm run apk
 
 ## Observações
 
-- Enquanto o rastreio está ligado aparece uma notificação fixa "VETRA".
+- Enquanto o rastreio está ligado aparece uma notificação fixa "Nexus Frota".
   É proposital: é ela que impede o Android de matar o GPS.
 - Sem internet (estrada), os pontos ficam guardados no celular e são
   enviados quando o sinal volta.

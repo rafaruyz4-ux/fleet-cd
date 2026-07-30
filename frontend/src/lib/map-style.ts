@@ -2,7 +2,7 @@ import type { StyleSpecification } from 'maplibre-gl'
 
 /**
  * Basemap "Dark Matter" da CARTO — escuro e discreto, combina com o tema
- * escuro VETRA e deixa o trajeto colorido saltar. Gratuito e sem token
+ * escuro NEXUS FROTA e deixa o trajeto colorido saltar. Gratuito e sem token
  * (atribuição obrigatória a OSM + CARTO). Para alto volume em produção,
  * considerar um plano pago da CARTO ou hospedar tiles próprios.
  */

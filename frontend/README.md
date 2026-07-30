@@ -1,4 +1,4 @@
-# VETRA — Dashboard do Gestor (frontend)
+﻿# NEXUS FROTA — Dashboard do Gestor (frontend)
 
 Painel web para gestores da operação de frota. Consome a API REST do backend
 (`../`, Express na porta 3000).

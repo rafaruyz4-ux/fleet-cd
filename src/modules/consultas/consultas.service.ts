@@ -217,7 +217,7 @@ export async function consultarVeiculo(
 }
 
 /**
- * Gera o comprovante em PDF (documento limpo do VETRA com a resposta oficial
+ * Gera o comprovante em PDF (documento limpo do Nexus Frota com a resposta oficial
  * do órgão), guarda em disco e aponta as multas da consulta para ele. O "site
  * receipt" da Infosimples (HTML técnico, link expira em dias) fica salvo ao
  * lado apenas como via de auditoria.
