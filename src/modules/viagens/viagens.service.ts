@@ -412,6 +412,25 @@ export async function iniciar(
   });
 }
 
+/**
+ * Início pelo APP do motorista: mesma regra do iniciar do gestor, mas só na
+ * viagem do próprio motorista (o app manda o id, a posse é conferida aqui).
+ */
+export async function iniciarPeloMotorista(
+  empresaId: string,
+  id: string,
+  motoristaId: string,
+): Promise<Viagem> {
+  const dona = await queryOne<{ motorista_id: string }>(
+    'SELECT motorista_id FROM viagens WHERE id = $1 AND empresa_id = $2',
+    [id, empresaId],
+  );
+  if (!dona || dona.motorista_id !== motoristaId) {
+    throw AppError.notFound('Viagem não encontrada');
+  }
+  return iniciar(empresaId, id, {});
+}
+
 export async function encerrar(
   empresaId: string,
   id: string,

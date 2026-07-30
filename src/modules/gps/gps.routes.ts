@@ -6,6 +6,7 @@ import { validate } from '../../middleware/validate';
 import { verifyAccessToken } from '../../utils/jwt';
 import { idParamSchema, ingestPosicoesSchema } from './gps.schemas';
 import * as service from './gps.service';
+import * as viagensService from '../viagens/viagens.service';
 
 // Rotas do APP (motorista autenticado). Montadas em /api/app.
 export const appRouter = Router();
@@ -17,6 +18,17 @@ appRouter.get(
   '/viagens',
   asyncHandler(async (req, res) => {
     res.json(await service.getMinhasViagens(req.user!.empresaId, req.user!.sub));
+  }),
+);
+
+// Motorista carimba a saída da própria viagem (botão "Iniciar viagem" do app).
+appRouter.post(
+  '/viagens/:id/iniciar',
+  validate({ params: idParamSchema }),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await viagensService.iniciarPeloMotorista(req.user!.empresaId, req.params.id!, req.user!.sub),
+    );
   }),
 );
 

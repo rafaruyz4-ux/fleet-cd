@@ -114,6 +114,10 @@ export async function loginMotorista(cpf: string, senha: string): Promise<string
 
 export const getMinhasViagens = () => chamar<MinhaViagem[]>('/app/viagens');
 
+/** Carimba a saída da viagem (botão "Iniciar viagem" do motorista). */
+export const iniciarViagem = (id: string) =>
+  chamar<{ id: string }>(`/app/viagens/${id}/iniciar`, { method: 'POST' });
+
 /**
  * Envia um lote de posições para a viagem em andamento do motorista
  * (rota fixa /app/posicoes — a tarefa em 2º plano não precisa saber o id).

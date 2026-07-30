@@ -4,7 +4,7 @@ import { ActivityIndicator, Platform, StatusBar as RNStatusBar, StyleSheet, View
 import { getMinhasViagens, type MinhaViagem } from './src/api';
 import { pararRastreio, rastreioLigado } from './src/rastreio';
 import { LoginScreen } from './src/screens/LoginScreen';
-import { RastreioScreen } from './src/screens/RastreioScreen';
+import { ViagemScreen } from './src/screens/ViagemScreen';
 import { ViagensScreen } from './src/screens/ViagensScreen';
 import { limparSessao, temSessao } from './src/storage';
 import { cores } from './src/theme';
@@ -26,7 +26,7 @@ export default function App() {
       if (await rastreioLigado()) {
         try {
           const viagens = await getMinhasViagens();
-          const ativa = viagens.find((v) => v.status === 'em_andamento');
+          const ativa = viagens.find((v) => v.status === 'em_andamento' && v.iniciada_em);
           if (ativa) {
             setViagemAtiva(ativa);
             setTela('rastreio');
@@ -66,7 +66,7 @@ export default function App() {
         />
       )}
       {tela === 'rastreio' && viagemAtiva && (
-        <RastreioScreen viagem={viagemAtiva} aoVoltar={() => setTela('viagens')} />
+        <ViagemScreen viagem={viagemAtiva} aoVoltar={() => setTela('viagens')} />
       )}
     </View>
   );

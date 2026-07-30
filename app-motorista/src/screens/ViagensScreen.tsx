@@ -7,22 +7,34 @@ import {
   Text,
   View,
 } from 'react-native';
-import { ApiError, getMinhasViagens, type MinhaViagem } from '../api';
+import { ApiError, getMinhasViagens, iniciarViagem, type MinhaViagem } from '../api';
 import { VetraLogo } from '../logo';
 import { getMotoristaNome } from '../storage';
 import { cores } from '../theme';
 import { Botao, Cartao, MensagemErro } from '../ui';
 
-const STATUS_ROTULO: Record<MinhaViagem['status'], string> = {
-  planejada: 'Programada',
-  em_andamento: 'Em andamento',
+/**
+ * A viagem nasce "em_andamento" no sistema, mas só conta como saída depois
+ * que o MOTORISTA aperta "Iniciar viagem" (iniciada_em preenchido).
+ */
+type Situacao = 'aguardando' | 'rodando' | 'concluida' | 'cancelada';
+
+function situacaoDe(v: MinhaViagem): Situacao {
+  if (v.status === 'concluida') return 'concluida';
+  if (v.status === 'cancelada') return 'cancelada';
+  return v.iniciada_em ? 'rodando' : 'aguardando';
+}
+
+const SITUACAO_ROTULO: Record<Situacao, string> = {
+  aguardando: 'Pronta para iniciar',
+  rodando: 'Em andamento',
   concluida: 'Concluída',
   cancelada: 'Cancelada',
 };
 
-const STATUS_COR: Record<MinhaViagem['status'], string> = {
-  planejada: cores.laranja,
-  em_andamento: cores.verde,
+const SITUACAO_COR: Record<Situacao, string> = {
+  aguardando: cores.laranja,
+  rodando: cores.verde,
   concluida: cores.mudo,
   cancelada: cores.vermelho,
 };
@@ -47,6 +59,7 @@ export function ViagensScreen({
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const [iniciando, setIniciando] = useState('');
 
   const carregar = useCallback(async () => {
     setErro('');
@@ -64,30 +77,55 @@ export function ViagensScreen({
     carregar();
   }, [carregar]);
 
-  const renderItem = useCallback(
-    ({ item }: { item: MinhaViagem }) => {
-      const ativa = item.status === 'em_andamento';
-      return (
-        <Pressable onPress={ativa ? () => aoAbrirViagem(item) : undefined}>
-          <Cartao style={{ gap: 10, ...(ativa ? { borderColor: cores.azul } : {}) }}>
-            <View style={estilos.linhaEntre}>
-              <Text style={estilos.placa}>{item.veiculo_placa}</Text>
-              <View style={[estilos.badge, { borderColor: STATUS_COR[item.status] }]}>
-                <Text style={[estilos.badgeTexto, { color: STATUS_COR[item.status] }]}>
-                  {STATUS_ROTULO[item.status]}
-                </Text>
-              </View>
-            </View>
-            <Text style={estilos.detalhe}>
-              {item.paradas_count} {item.paradas_count === 1 ? 'parada' : 'paradas'} · início{' '}
-              {dataCurta(item.iniciada_em ?? item.criado_em)}
-            </Text>
-            {ativa && <Botao titulo="Abrir viagem e rastrear" onPress={() => aoAbrirViagem(item)} />}
-          </Cartao>
-        </Pressable>
-      );
+  const iniciar = useCallback(
+    async (viagem: MinhaViagem) => {
+      setErro('');
+      setIniciando(viagem.id);
+      try {
+        await iniciarViagem(viagem.id);
+        aoAbrirViagem({ ...viagem, iniciada_em: new Date().toISOString() });
+      } catch (e) {
+        setErro(e instanceof ApiError ? e.message : 'Não deu para iniciar a viagem agora.');
+      } finally {
+        setIniciando('');
+      }
     },
     [aoAbrirViagem],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: MinhaViagem }) => {
+      const situacao = situacaoDe(item);
+      return (
+        <Cartao style={{ gap: 10, ...(situacao !== 'concluida' && situacao !== 'cancelada' ? { borderColor: cores.azul } : {}) }}>
+          <View style={estilos.linhaEntre}>
+            <Text style={estilos.placa}>{item.veiculo_placa}</Text>
+            <View style={[estilos.badge, { borderColor: SITUACAO_COR[situacao] }]}>
+              <Text style={[estilos.badgeTexto, { color: SITUACAO_COR[situacao] }]}>
+                {SITUACAO_ROTULO[situacao]}
+              </Text>
+            </View>
+          </View>
+          <Text style={estilos.detalhe}>
+            {item.paradas_count} {item.paradas_count === 1 ? 'parada' : 'paradas'} ·{' '}
+            {situacao === 'aguardando'
+              ? `programada ${dataCurta(item.criado_em)}`
+              : `início ${dataCurta(item.iniciada_em ?? item.criado_em)}`}
+          </Text>
+          {situacao === 'aguardando' && (
+            <Botao
+              titulo="Iniciar viagem"
+              onPress={() => iniciar(item)}
+              carregando={iniciando === item.id}
+            />
+          )}
+          {situacao === 'rodando' && (
+            <Botao titulo="Abrir viagem" onPress={() => aoAbrirViagem(item)} />
+          )}
+        </Cartao>
+      );
+    },
+    [aoAbrirViagem, iniciar, iniciando],
   );
 
   return (
