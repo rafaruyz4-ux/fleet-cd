@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Nexus Frota",
-    "slug": "vetra-motorista",
+    "slug": "nexus-frota-motorista",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -57,11 +57,11 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "owner": "nexus-orbital",
     "extra": {
       "eas": {
-        "projectId": "9a85ddf9-8247-4d48-a66b-dd6fe1187930"
+        "projectId": "c555e112-c943-4fa5-a7f5-fd6f6b52f854"
       }
-    },
-    "owner": "nexus-orbital"
+    }
   }
 }
