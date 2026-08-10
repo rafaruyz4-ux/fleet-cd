@@ -3,6 +3,7 @@ import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from 'ma
 import { Crosshair, Route } from 'lucide-react'
 import type { Alerta, LatLng, ParadaDetectada, PontoTrajeto } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatDateTime } from '@/lib/format'
 import { formatHora, haversineM } from '@/lib/geo'
 import { BASE_MAP_STYLE, DEFAULT_CENTER } from '@/lib/map-style'
 
@@ -33,6 +34,46 @@ const ALERTA_COR: Record<string, string> = {
   desvio_rota: '#fb923c',
   parada_longa: '#fbbf24',
   sem_gps: '#94a3b8',
+}
+
+// Mesmos rótulos do AlertaTipoBadge (tabela de alertas) — vocabulário único.
+const ALERTA_LABEL: Record<string, string> = {
+  velocidade_alta: 'Velocidade alta',
+  desvio_rota: 'Desvio de rota',
+  parada_longa: 'Parada longa',
+  sem_gps: 'Sem GPS',
+}
+
+/**
+ * Conteúdo do popup de um marcador: título com bolinha colorida + linhas de
+ * detalhe. Montado via DOM (textContent) — a descrição vem do backend e não
+ * pode entrar como HTML.
+ */
+function popupInfo(
+  titulo: string,
+  cor: string | null,
+  linhas: (string | null | undefined)[],
+): HTMLElement {
+  const el = document.createElement('div')
+  el.className = 'space-y-1'
+  const cab = document.createElement('div')
+  cab.className = 'flex items-center gap-1.5 text-xs font-semibold text-slate-100'
+  if (cor) {
+    const dot = document.createElement('span')
+    dot.className = 'h-2 w-2 shrink-0 rounded-full'
+    dot.style.backgroundColor = cor
+    cab.appendChild(dot)
+  }
+  cab.appendChild(document.createTextNode(titulo))
+  el.appendChild(cab)
+  for (const linha of linhas) {
+    if (!linha) continue
+    const p = document.createElement('div')
+    p.className = 'text-xs text-slate-400'
+    p.textContent = linha
+    el.appendChild(p)
+  }
+  return el
 }
 
 // ---- Cor por velocidade (C2) ----
@@ -292,10 +333,12 @@ export function TripMap({
       markersRef.current.forEach((m) => m.remove())
       markersRef.current = []
 
-      const addMarker = (lng: number, lat: number, el: HTMLElement, title: string) => {
+      const addMarker = (lng: number, lat: number, el: HTMLElement, conteudo: HTMLElement) => {
+        const popup = new maplibregl.Popup({ offset: 16, closeButton: false, maxWidth: '280px' })
+        popup.setDOMContent(conteudo)
         const m = new maplibregl.Marker({ element: el })
           .setLngLat([lng, lat])
-          .setPopup(new maplibregl.Popup({ offset: 16 }).setText(title))
+          .setPopup(popup)
           .addTo(map)
         markersRef.current.push(m)
       }
@@ -303,17 +346,34 @@ export function TripMap({
       if (trajetoCoords.length > 0) {
         const first = trajetoCoords[0]!
         const last = trajetoCoords[trajetoCoords.length - 1]!
-        addMarker(first[0], first[1], elInicio(), 'Início')
-        if (trajetoCoords.length > 1) addMarker(last[0], last[1], elPosicaoAtual(), 'Posição atual')
+        addMarker(
+          first[0],
+          first[1],
+          elInicio(),
+          popupInfo('Início do trajeto', '#10b981', [formatDateTime(pontos[0]!.registrado_em)]),
+        )
+        if (trajetoCoords.length > 1)
+          addMarker(
+            last[0],
+            last[1],
+            elPosicaoAtual(),
+            popupInfo('Posição atual', '#2563eb', [
+              formatDateTime(pontos[pontos.length - 1]!.registrado_em),
+            ]),
+          )
       }
 
       for (const a of alertas ?? []) {
         if (a.coordenada) {
+          const cor = ALERTA_COR[a.tipo] ?? '#ef4444'
           addMarker(
             a.coordenada.lng,
             a.coordenada.lat,
-            elAlerta(ALERTA_COR[a.tipo] ?? '#ef4444'),
-            a.descricao ?? a.tipo,
+            elAlerta(cor),
+            popupInfo(ALERTA_LABEL[a.tipo] ?? a.tipo, cor, [
+              a.descricao,
+              formatDateTime(a.criado_em),
+            ]),
           )
         }
       }
@@ -324,7 +384,10 @@ export function TripMap({
           p.lng,
           p.lat,
           elParadaDetectada(),
-          `Parado ${p.duracao_min}min (${formatHora(p.inicio)}–${formatHora(p.fim)})`,
+          popupInfo('Parada detectada', '#64748b', [
+            `Parado por ${p.duracao_min} min`,
+            `${formatHora(p.inicio)} – ${formatHora(p.fim)}`,
+          ]),
         )
       }
 
