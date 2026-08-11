@@ -3,10 +3,21 @@
 # A API aplica migrations + seed do admin no start (entrypoint).
 # Só o serviço web publica porta no host; o resto fica na rede interna.
 
+# Rotação de logs: sem isso o json-file cresce sem limite e enche o disco do host.
+x-logs: &logs
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
 services:
   postgres:
     image: postgis/postgis:16-3.4
     restart: unless-stopped
+    <<: *logs
+    # Teto de memória: um vizinho guloso não pode derrubar o host inteiro.
+    mem_limit: 1500m
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-fleet}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.prod}
@@ -22,6 +33,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    <<: *logs
+    mem_limit: 256m
     volumes:
       - redisdata:/data
     healthcheck:
@@ -35,6 +48,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    <<: *logs
+    mem_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +60,9 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-fleet}:${POSTGRES_PASSWORD:-fleet}@postgres:5432/${POSTGRES_DB:-fleet_cd}
       REDIS_URL: redis://redis:6379
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      # Sem default '*': em produção a lista de origens é obrigatória (o boot
+      # da API também recusa '*', mas melhor falhar já no compose).
+      CORS_ORIGINS: ${CORS_ORIGINS:?defina CORS_ORIGINS no .env.prod}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?defina JWT_ACCESS_SECRET no .env.prod}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?defina JWT_REFRESH_SECRET no .env.prod}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
@@ -55,12 +72,22 @@ services:
       SEED_ADMIN_NOME: ${SEED_ADMIN_NOME:-Administrador}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@cd.local}
       SEED_ADMIN_SENHA: ${SEED_ADMIN_SENHA:?defina SEED_ADMIN_SENHA no .env.prod}
+      # Cobrança Asaas: token do webhook é obrigatório em produção; sem API key roda em modo simulado.
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?defina ASAAS_WEBHOOK_TOKEN no .env.prod}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-https://sandbox.asaas.com/api/v3}
+      # Infosimples: sem API key roda em modo simulado (multas de exemplo).
+      INFOSIMPLES_API_KEY: ${INFOSIMPLES_API_KEY:-}
+      INFOSIMPLES_LOGIN_CPF: ${INFOSIMPLES_LOGIN_CPF:-}
+      INFOSIMPLES_LOGIN_SENHA: ${INFOSIMPLES_LOGIN_SENHA:-}
 
   web:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    <<: *logs
+    mem_limit: 128m
     depends_on:
       - api
     ports:

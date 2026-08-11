@@ -25,6 +25,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Artefatos: dist compilado + migrations .sql (lidas em runtime pelo migrate).
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+COPY public ./public
 COPY docker-entrypoint.sh ./
 
 # Roda como usuário não-root (o usuário 'node' já existe na imagem oficial).

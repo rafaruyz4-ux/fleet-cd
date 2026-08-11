@@ -9,7 +9,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleet}
       POSTGRES_DB: ${POSTGRES_DB:-fleet_cd}
     ports:
-      - "5432:5432"
+      # Só localhost: sem o 127.0.0.1 a porta fica aberta pra rede toda (inclusive Tailscale)
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +24,8 @@ services:
     container_name: fleet_cd_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # Só localhost: o Redis de dev não tem senha — não pode ficar exposto na rede
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
 
