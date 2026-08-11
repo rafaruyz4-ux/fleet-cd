@@ -34,7 +34,7 @@ export function VetraLogo() {
         <div className="whitespace-nowrap font-display text-base font-extrabold tracking-[0.14em] text-foreground">
           NEXUS FROTA
         </div>
-        <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Inteligência em Movimento
         </div>
       </div>

@@ -131,7 +131,8 @@ export function CriarViagemModal({ open, onClose }: { open: boolean; onClose: ()
               <p className="p-2 text-sm text-muted-foreground">Carregando NFs…</p>
             ) : nfs.length === 0 ? (
               <p className="p-2 text-sm text-muted-foreground">
-                Nenhuma NF disponível (status "importada") para alocar.
+                Nenhuma nota fiscal disponível para entrega no momento. Importe o XML da NF-e em
+                Cadastros → Notas fiscais e ela aparece aqui.
               </p>
             ) : (
               nfs.map((nf) => (

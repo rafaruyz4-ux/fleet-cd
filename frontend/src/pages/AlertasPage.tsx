@@ -41,7 +41,7 @@ export function AlertasPage() {
     <div>
       <PageHeader title="Alertas" description="Eventos de telemetria detectados nas viagens." />
 
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
           <div className="space-y-1">
             <Label>Tipo</Label>
@@ -81,6 +81,51 @@ export function AlertasPage() {
 
         {alertas.length > 0 && (
           <div className={isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}>
+            {/* Cards empilhados no mobile (<md) — mesmo padrão da lista de viagens */}
+            <div className="space-y-2 md:hidden">
+              {alertas.map((a) => (
+                <div
+                  key={a.id}
+                  className={`rounded-lg border bg-card px-4 py-3 ${a.visualizado ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <AlertaTipoBadge tipo={a.tipo} />
+                    {a.visualizado ? (
+                      <Badge variant="muted">Visto</Badge>
+                    ) : (
+                      <Badge variant="warning">Novo</Badge>
+                    )}
+                  </div>
+                  <div className="mt-2 text-sm">{a.descricao ?? '—'}</div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateTime(a.criado_em)}
+                    </span>
+                    <div className="flex gap-2">
+                      {a.viagem_id && (
+                        <Link to={`/viagens/${a.viagem_id}`}>
+                          <Button size="sm" variant="ghost">
+                            <ExternalLink className="h-4 w-4" /> Viagem
+                          </Button>
+                        </Link>
+                      )}
+                      {!a.visualizado && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={marcar.isPending}
+                          onClick={() => marcar.mutate({ id: a.id, visualizado: true })}
+                        >
+                          <Check className="h-4 w-4" /> OK, visto
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block">
             <Table>
               <THead>
                 <TR>
@@ -131,6 +176,7 @@ export function AlertasPage() {
                 ))}
               </TBody>
             </Table>
+            </div>
             <Pagination
               total={data?.total ?? 0}
               limit={LIMIT}

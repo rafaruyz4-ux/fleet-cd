@@ -8,6 +8,7 @@ import type {
   EmpresaCriada,
   EmpresaDetalhe,
   Fatura,
+  FrotaMapaResposta,
   Motorista,
   Multa,
   NotaFiscal,
@@ -116,6 +117,8 @@ export function useMudarPlano() {
       // O limite de consultas e a trava de veículos dependem do plano.
       qc.invalidateQueries({ queryKey: ['consultas-consumo'] })
       qc.invalidateQueries({ queryKey: ['veiculos'] })
+      // A troca gera cobrança nova — a aba Faturas precisa refletir na hora.
+      qc.invalidateQueries({ queryKey: ['faturas'] })
     },
   })
 }
@@ -307,6 +310,22 @@ export function useViagemMutations() {
 }
 
 // ---------------------------------------------------------------------
+// Mapa geral da frota (home): última posição de cada viagem em andamento.
+// Polling de 15s — o componente do mapa atualiza os marcadores via setLngLat,
+// sem recriar o mapa.
+// ---------------------------------------------------------------------
+export function useFrotaMapa() {
+  return useQuery({
+    queryKey: ['frota-mapa'],
+    queryFn: () => api.get<FrotaMapaResposta>('/dashboard/frota-mapa'),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+    // Endpoint pode ainda não existir em ambientes velhos: sem retry em loop.
+    retry: 1,
+  })
+}
+
+// ---------------------------------------------------------------------
 // Alertas (feed do gestor)
 // ---------------------------------------------------------------------
 export interface AlertasFiltro {
@@ -332,6 +351,20 @@ export function useAlertas(filtro: AlertasFiltro) {
   })
 }
 
+/**
+ * Contador de alertas não vistos para o badge da sidebar — polling de 45s
+ * para o número "viver" sem pesar o backend.
+ */
+export function useAlertasNaoVistosCount() {
+  return useQuery({
+    queryKey: ['alertas-nao-vistos-count'],
+    queryFn: () =>
+      api.get<Paginated<Alerta>>(`/alertas${qs({ visualizado: 'false', limit: 1, offset: 0 })}`),
+    refetchInterval: 45_000,
+    select: (d) => d.total,
+  })
+}
+
 export function useMarcarAlerta() {
   const qc = useQueryClient()
   return useMutation({
@@ -340,6 +373,7 @@ export function useMarcarAlerta() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['alertas'] })
       qc.invalidateQueries({ queryKey: ['viagem-alertas'] })
+      qc.invalidateQueries({ queryKey: ['alertas-nao-vistos-count'] })
     },
   })
 }

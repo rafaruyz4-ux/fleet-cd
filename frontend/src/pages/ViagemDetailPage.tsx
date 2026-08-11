@@ -20,6 +20,7 @@ import {
   ParadaStatusBadge,
   ViagemStatusBadge,
 } from '@/components/StatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -80,6 +81,14 @@ export function ViagemDetailPage() {
     [trajetoria],
   )
 
+  // Situação AO VIVO (parado há X min / em movimento / sem sinal) — recalcula
+  // a cada atualização da trajetória (15s quando em andamento).
+  const aoVivo = useMemo(
+    () =>
+      emAndamento && viagem?.iniciada_em ? situacaoAoVivo(trajetoria?.pontos ?? []) : null,
+    [trajetoria, emAndamento, viagem?.iniciada_em],
+  )
+
   if (isLoading || error || !viagem) {
     return (
       <div>
@@ -101,6 +110,23 @@ export function ViagemDetailPage() {
         description={`${viagem.motorista_nome}${viagem.veiculo_modelo ? ` · ${viagem.veiculo_modelo}` : ''}`}
         actions={
           <div className="flex items-center gap-2">
+            {aoVivo && (
+              <Badge
+                variant={
+                  aoVivo.tipo === 'parado'
+                    ? 'warning'
+                    : aoVivo.tipo === 'movimento'
+                      ? 'success'
+                      : 'muted'
+                }
+              >
+                {aoVivo.tipo === 'parado'
+                  ? `Parado há ${formatDuracaoMin(aoVivo.desdeMin)}`
+                  : aoVivo.tipo === 'movimento'
+                    ? 'Em movimento'
+                    : `Sem sinal há ${formatDuracaoMin(aoVivo.semSinalMin)}`}
+              </Badge>
+            )}
             <ViagemStatusBadge status={viagem.status} />
             {emAndamento && (
               <>
@@ -415,6 +441,35 @@ function estatisticasGps(
   const movimentoMin = Math.max(0, totalMin - paradoMin)
   const velMedia = movimentoMin > 0 ? km / (movimentoMin / 60) : 0
   return { km, movimentoMin, paradoMin, paradas: paradasDetectadas.length, velMedia, velMax }
+}
+
+// Situação AO VIVO do veículo a partir do rabo da trajetória. Mesmo raio da
+// detecção de paradas (60 m), mas SEM o mínimo de 5 min — o gestor quer saber
+// que parou agora, não daqui a pouco. "Parado" exige 2+ min no mesmo lugar
+// (senão semáforo vira parada); último ponto velho demais = sem sinal.
+function situacaoAoVivo(pontos: PontoTrajeto[]): {
+  tipo: 'parado' | 'movimento' | 'sem-sinal'
+  desdeMin: number
+  semSinalMin: number
+} | null {
+  if (!pontos.length) return null
+  const ultimo = pontos[pontos.length - 1]!
+  const agoraMs = Date.now()
+  const ultimoMs = new Date(ultimo.registrado_em).getTime()
+  const semSinalMin = Math.max(0, Math.floor((agoraMs - ultimoMs) / 60000))
+  if (semSinalMin >= 10) return { tipo: 'sem-sinal', desdeMin: 0, semSinalMin }
+
+  // Anda pra trás enquanto os pontos ficam a menos de 60 m do último.
+  let inicioMs = ultimoMs
+  for (let i = pontos.length - 2; i >= 0; i--) {
+    if (haversineM(pontos[i]!, ultimo) > 60) break
+    inicioMs = new Date(pontos[i]!.registrado_em).getTime()
+  }
+  const paradoMs = agoraMs - inicioMs
+  if (paradoMs >= 2 * 60 * 1000 && inicioMs < ultimoMs) {
+    return { tipo: 'parado', desdeMin: Math.floor(paradoMs / 60000), semSinalMin }
+  }
+  return { tipo: 'movimento', desdeMin: 0, semSinalMin }
 }
 
 // Acha o ponto de GPS mais próximo de um horário (até 30 min de diferença).

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -15,8 +16,14 @@ import { AlertaTipoBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { CardListSkeleton, Skeleton } from '@/components/ui/skeleton'
+import { PageLoader } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
+
+// Lazy: o MapLibre (~pesado) só é baixado quando a home renderiza o mapa.
+const FrotaMapa = lazy(() =>
+  import('@/components/FrotaMapa').then((m) => ({ default: m.FrotaMapa })),
+)
 
 export function DashboardPage() {
   const emAndamento = useViagens({ status: 'em_andamento', limit: 5 })
@@ -76,6 +83,26 @@ export function DashboardPage() {
             tone="text-success"
           />
         </div>
+
+        {/* Mapa geral da frota: toda a operação ao vivo num olhar. */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Mapa da frota
+          </h2>
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <Suspense
+                fallback={
+                  <div className="h-[380px] w-full">
+                    <PageLoader label="Carregando mapa…" />
+                  </div>
+                }
+              >
+                <FrotaMapa className="h-[380px] w-full" />
+              </Suspense>
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
@@ -155,7 +182,7 @@ export function DashboardPage() {
             </div>
           ) : (
             <p className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-              Nenhum alerta pendente. 🎉
+              Nenhum alerta pendente. Frota rodando em paz.
             </p>
           )}
         </section>
@@ -280,7 +307,7 @@ function Stat({
             <Icon className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-display text-3xl font-bold">
+            <div className="font-display text-4xl font-bold leading-none">
               {loading ? <Skeleton className="my-1.5 h-7 w-12" /> : (value ?? '—')}
             </div>
             <div className="text-xs text-muted-foreground">{label}</div>

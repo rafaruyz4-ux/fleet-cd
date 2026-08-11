@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { Copy, Pencil, Plus, ReceiptText, Smartphone, Trash2 } from 'lucide-react'
 import {
   useConsultarVeiculo,
   useConsumoConsultas,
@@ -44,6 +44,38 @@ function AtivoBadge({ ativo }: { ativo: boolean }) {
   return ativo ? <Badge variant="success">Ativo</Badge> : <Badge variant="muted">Inativo</Badge>
 }
 
+// Inativos são registros preservados só por histórico (viagens/multas):
+// ficam fora da listagem por padrão.
+function useFiltroInativos<T extends { ativo: boolean }>(data: T[] | undefined) {
+  const [mostrarInativos, setMostrarInativos] = useState(false)
+  const inativos = data?.filter((d) => !d.ativo).length ?? 0
+  const visiveis = mostrarInativos ? data : data?.filter((d) => d.ativo)
+  return { visiveis, inativos, mostrarInativos, setMostrarInativos }
+}
+
+function ToggleInativos({
+  inativos,
+  mostrar,
+  onChange,
+}: {
+  inativos: number
+  mostrar: boolean
+  onChange: (v: boolean) => void
+}) {
+  if (!inativos && !mostrar) return null
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+      <input
+        type="checkbox"
+        checked={mostrar}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-primary"
+      />
+      Mostrar inativos ({inativos})
+    </label>
+  )
+}
+
 function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   return (
     <div className="flex justify-end gap-1">
@@ -72,11 +104,15 @@ export function CadastrosPage() {
         description="Veículos, motoristas, unidades, rotas e notas fiscais."
       />
 
-      <div className="space-y-4 p-6">
-        <div className="flex gap-1 overflow-x-auto border-b">
+      <div className="space-y-4 p-4 sm:p-6">
+        <div role="tablist" aria-label="Tipos de cadastro" className="flex gap-1 overflow-x-auto border-b">
           {ABAS.map((a) => (
             <button
               key={a.key}
+              role="tab"
+              id={`tab-cadastros-${a.key}`}
+              aria-selected={aba === a.key}
+              aria-controls={`panel-cadastros-${a.key}`}
               onClick={() => setAba(a.key)}
               className={cn(
                 '-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors',
@@ -90,11 +126,13 @@ export function CadastrosPage() {
           ))}
         </div>
 
-        {aba === 'veiculos' && <VeiculosTab />}
-        {aba === 'motoristas' && <MotoristasTab />}
-        {aba === 'unidades' && <UnidadesTab />}
-        {aba === 'rotas' && <RotasTab />}
-        {aba === 'nfs' && <NfsTab />}
+        <div role="tabpanel" id={`panel-cadastros-${aba}`} aria-labelledby={`tab-cadastros-${aba}`}>
+          {aba === 'veiculos' && <VeiculosTab />}
+          {aba === 'motoristas' && <MotoristasTab />}
+          {aba === 'unidades' && <UnidadesTab />}
+          {aba === 'rotas' && <RotasTab />}
+          {aba === 'nfs' && <NfsTab />}
+        </div>
       </div>
     </div>
   )
@@ -112,6 +150,7 @@ function TabToolbar({ label, onNew }: { label: string; onNew: () => void }) {
 
 function VeiculosTab() {
   const { data, isLoading, error } = useVeiculos()
+  const { visiveis, inativos, mostrarInativos, setMostrarInativos } = useFiltroInativos(data)
   const { remover } = useVeiculoMutations()
   const consumo = useConsumoConsultas()
   const consultar = useConsultarVeiculo()
@@ -168,7 +207,14 @@ function VeiculosTab() {
             )}
           </div>
         )}
-        <TabToolbar label="Novo veículo" onNew={novo} />
+        <div className="flex items-center gap-3">
+          <ToggleInativos
+            inativos={inativos}
+            mostrar={mostrarInativos}
+            onChange={setMostrarInativos}
+          />
+          <TabToolbar label="Novo veículo" onNew={novo} />
+        </div>
       </div>
 
       {aviso && (
@@ -184,11 +230,11 @@ function VeiculosTab() {
         </p>
       )}
 
-      {isLoading || error || !data?.length ? (
+      {isLoading || error || !visiveis?.length ? (
         <DataState
           isLoading={isLoading}
           error={error}
-          isEmpty={!data?.length}
+          isEmpty={!visiveis?.length}
           skeleton={<TableSkeleton cols={6} />}
           emptyLabel="Nenhum veículo cadastrado ainda."
           emptyAction={
@@ -198,46 +244,85 @@ function VeiculosTab() {
           }
         />
       ) : (
-        <Table>
-          <THead>
-            <TR>
-              <TH>Placa</TH>
-              <TH>Modelo</TH>
-              <TH>Tipo</TH>
-              <TH>Capacidade (kg)</TH>
-              <TH>Situação</TH>
-              <TH></TH>
-            </TR>
-          </THead>
-          <TBody>
-            {data.map((v) => (
-              <TR key={v.id}>
-                <TD className="font-medium">{v.placa}</TD>
-                <TD>{v.modelo ?? '—'}</TD>
-                <TD>{v.tipo}</TD>
-                <TD>{v.capacidade_kg ?? '—'}</TD>
-                <TD>
+        <>
+          {/* Cards empilhados no mobile (<md) — mesmo padrão da lista de viagens */}
+          <div className="space-y-2 md:hidden">
+            {visiveis.map((v) => (
+              <div key={v.id} className="rounded-lg border bg-card px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">
+                    {v.placa}
+                    {v.modelo && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        {v.modelo}
+                      </span>
+                    )}
+                  </span>
                   <AtivoBadge ativo={v.ativo} />
-                </TD>
-                <TD>
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => buscarDebitos(v)}
-                      disabled={buscandoId === v.id}
-                      title="Buscar débitos e multas na Infosimples"
-                    >
-                      <ReceiptText className="h-4 w-4" />
-                      {buscandoId === v.id ? 'Buscando…' : 'Buscar débitos'}
-                    </Button>
-                    <RowActions onEdit={() => editar(v)} onDelete={() => setExcluindo(v)} />
-                  </div>
-                </TD>
-              </TR>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {v.tipo}
+                  {v.capacidade_kg != null && ` · ${v.capacidade_kg} kg`}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => buscarDebitos(v)}
+                    disabled={buscandoId === v.id}
+                  >
+                    <ReceiptText className="h-4 w-4" />
+                    {buscandoId === v.id ? 'Buscando…' : 'Buscar débitos'}
+                  </Button>
+                  <RowActions onEdit={() => editar(v)} onDelete={() => setExcluindo(v)} />
+                </div>
+              </div>
             ))}
-          </TBody>
-        </Table>
+          </div>
+
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Placa</TH>
+                  <TH>Modelo</TH>
+                  <TH>Tipo</TH>
+                  <TH>Capacidade (kg)</TH>
+                  <TH>Situação</TH>
+                  <TH></TH>
+                </TR>
+              </THead>
+              <TBody>
+                {visiveis.map((v) => (
+                  <TR key={v.id}>
+                    <TD className="font-medium">{v.placa}</TD>
+                    <TD>{v.modelo ?? '—'}</TD>
+                    <TD>{v.tipo}</TD>
+                    <TD>{v.capacidade_kg ?? '—'}</TD>
+                    <TD>
+                      <AtivoBadge ativo={v.ativo} />
+                    </TD>
+                    <TD>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => buscarDebitos(v)}
+                          disabled={buscandoId === v.id}
+                          title="Buscar débitos e multas na Infosimples"
+                        >
+                          <ReceiptText className="h-4 w-4" />
+                          {buscandoId === v.id ? 'Buscando…' : 'Buscar débitos'}
+                        </Button>
+                        <RowActions onEdit={() => editar(v)} onDelete={() => setExcluindo(v)} />
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
       {modalOpen && (
         <VeiculoFormModal open={modalOpen} onClose={() => setModalOpen(false)} veiculo={editando} />
@@ -265,8 +350,40 @@ function VeiculosTab() {
   )
 }
 
+/**
+ * Link permanente do app do motorista + instruções — antes só existia no
+ * checklist de primeiros passos da home (que some sozinho).
+ */
+function LinkAppMotorista() {
+  const link = `${window.location.origin}/motorista`
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+      toast.success('Link do app do motorista copiado.')
+    } catch {
+      toast.error('Não foi possível copiar. O link é: ' + link)
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-sm">
+      <Smartphone className="h-4 w-4 shrink-0 text-primary" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">App do motorista</p>
+        <p className="text-xs text-muted-foreground">
+          Envie este link ao motorista (WhatsApp funciona bem). Ele abre no celular e entra com o
+          CPF e a senha cadastrados aqui: <span className="break-all font-medium text-foreground">{link}</span>
+        </p>
+      </div>
+      <Button size="sm" variant="outline" onClick={copiar}>
+        <Copy className="h-3.5 w-3.5" /> Copiar link
+      </Button>
+    </div>
+  )
+}
+
 function MotoristasTab() {
   const { data, isLoading, error } = useMotoristas()
+  const { visiveis, inativos, mostrarInativos, setMostrarInativos } = useFiltroInativos(data)
   const { remover } = useMotoristaMutations()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Motorista | null>(null)
@@ -279,12 +396,20 @@ function MotoristasTab() {
 
   return (
     <div className="space-y-3">
-      <TabToolbar label="Novo motorista" onNew={novo} />
-      {isLoading || error || !data?.length ? (
+      <div className="flex items-center justify-end gap-3">
+        <ToggleInativos
+          inativos={inativos}
+          mostrar={mostrarInativos}
+          onChange={setMostrarInativos}
+        />
+        <TabToolbar label="Novo motorista" onNew={novo} />
+      </div>
+      <LinkAppMotorista />
+      {isLoading || error || !visiveis?.length ? (
         <DataState
           isLoading={isLoading}
           error={error}
-          isEmpty={!data?.length}
+          isEmpty={!visiveis?.length}
           skeleton={<TableSkeleton cols={7} />}
           emptyLabel="Nenhum motorista cadastrado ainda."
           emptyAction={
@@ -294,36 +419,26 @@ function MotoristasTab() {
           }
         />
       ) : (
-        <Table>
-          <THead>
-            <TR>
-              <TH>Nome</TH>
-              <TH>CPF</TH>
-              <TH>CNH</TH>
-              <TH>Telefone</TH>
-              <TH>Acesso ao app</TH>
-              <TH>Situação</TH>
-              <TH></TH>
-            </TR>
-          </THead>
-          <TBody>
-            {data.map((m) => (
-              <TR key={m.id}>
-                <TD className="font-medium">{m.nome}</TD>
-                <TD>{formatCpf(m.cpf)}</TD>
-                <TD>{m.categoria_cnh ?? '—'}</TD>
-                <TD>{m.telefone ?? '—'}</TD>
-                <TD>
-                  {m.tem_senha ? (
-                    <Badge variant="success">Liberado</Badge>
-                  ) : (
-                    <Badge variant="muted">Sem senha</Badge>
-                  )}
-                </TD>
-                <TD>
+        <>
+          {/* Cards empilhados no mobile (<md) */}
+          <div className="space-y-2 md:hidden">
+            {visiveis.map((m) => (
+              <div key={m.id} className="rounded-lg border bg-card px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">{m.nome}</span>
                   <AtivoBadge ativo={m.ativo} />
-                </TD>
-                <TD>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  CPF {formatCpf(m.cpf)}
+                  {m.categoria_cnh && ` · CNH ${m.categoria_cnh}`}
+                  {m.telefone && ` · ${m.telefone}`}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  {m.tem_senha ? (
+                    <Badge variant="success">App liberado</Badge>
+                  ) : (
+                    <Badge variant="muted">Sem senha do app</Badge>
+                  )}
                   <RowActions
                     onEdit={() => {
                       setEditando(m)
@@ -331,11 +446,56 @@ function MotoristasTab() {
                     }}
                     onDelete={() => setExcluindo(m)}
                   />
-                </TD>
-              </TR>
+                </div>
+              </div>
             ))}
-          </TBody>
-        </Table>
+          </div>
+
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Nome</TH>
+                  <TH>CPF</TH>
+                  <TH>CNH</TH>
+                  <TH>Telefone</TH>
+                  <TH>Acesso ao app</TH>
+                  <TH>Situação</TH>
+                  <TH></TH>
+                </TR>
+              </THead>
+              <TBody>
+                {visiveis.map((m) => (
+                  <TR key={m.id}>
+                    <TD className="font-medium">{m.nome}</TD>
+                    <TD>{formatCpf(m.cpf)}</TD>
+                    <TD>{m.categoria_cnh ?? '—'}</TD>
+                    <TD>{m.telefone ?? '—'}</TD>
+                    <TD>
+                      {m.tem_senha ? (
+                        <Badge variant="success">Liberado</Badge>
+                      ) : (
+                        <Badge variant="muted">Sem senha</Badge>
+                      )}
+                    </TD>
+                    <TD>
+                      <AtivoBadge ativo={m.ativo} />
+                    </TD>
+                    <TD>
+                      <RowActions
+                        onEdit={() => {
+                          setEditando(m)
+                          setModalOpen(true)
+                        }}
+                        onDelete={() => setExcluindo(m)}
+                      />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
       {modalOpen && (
         <MotoristaFormModal
@@ -369,6 +529,7 @@ function MotoristasTab() {
 
 function UnidadesTab() {
   const { data, isLoading, error } = useUnidades()
+  const { visiveis, inativos, mostrarInativos, setMostrarInativos } = useFiltroInativos(data)
   const { remover } = useUnidadeMutations()
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Unidade | null>(null)
@@ -381,12 +542,19 @@ function UnidadesTab() {
 
   return (
     <div className="space-y-3">
-      <TabToolbar label="Nova unidade" onNew={nova} />
-      {isLoading || error || !data?.length ? (
+      <div className="flex items-center justify-end gap-3">
+        <ToggleInativos
+          inativos={inativos}
+          mostrar={mostrarInativos}
+          onChange={setMostrarInativos}
+        />
+        <TabToolbar label="Nova unidade" onNew={nova} />
+      </div>
+      {isLoading || error || !visiveis?.length ? (
         <DataState
           isLoading={isLoading}
           error={error}
-          isEmpty={!data?.length}
+          isEmpty={!visiveis?.length}
           skeleton={<TableSkeleton cols={5} />}
           emptyLabel="Nenhuma unidade cadastrada ainda."
           emptyAction={
@@ -396,26 +564,20 @@ function UnidadesTab() {
           }
         />
       ) : (
-        <Table>
-          <THead>
-            <TR>
-              <TH>Nome</TH>
-              <TH>CNPJ</TH>
-              <TH>Endereço</TH>
-              <TH>Situação</TH>
-              <TH></TH>
-            </TR>
-          </THead>
-          <TBody>
-            {data.map((u) => (
-              <TR key={u.id}>
-                <TD className="font-medium">{u.nome}</TD>
-                <TD>{u.cnpj ?? '—'}</TD>
-                <TD className="max-w-80 truncate">{u.endereco ?? '—'}</TD>
-                <TD>
+        <>
+          {/* Cards empilhados no mobile (<md) */}
+          <div className="space-y-2 md:hidden">
+            {visiveis.map((u) => (
+              <div key={u.id} className="rounded-lg border bg-card px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">{u.nome}</span>
                   <AtivoBadge ativo={u.ativo} />
-                </TD>
-                <TD>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {u.cnpj && <div>CNPJ {u.cnpj}</div>}
+                  {u.endereco && <div className="truncate">{u.endereco}</div>}
+                </div>
+                <div className="mt-2 flex justify-end">
                   <RowActions
                     onEdit={() => {
                       setEditando(u)
@@ -423,11 +585,46 @@ function UnidadesTab() {
                     }}
                     onDelete={() => setExcluindo(u)}
                   />
-                </TD>
-              </TR>
+                </div>
+              </div>
             ))}
-          </TBody>
-        </Table>
+          </div>
+
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Nome</TH>
+                  <TH>CNPJ</TH>
+                  <TH>Endereço</TH>
+                  <TH>Situação</TH>
+                  <TH></TH>
+                </TR>
+              </THead>
+              <TBody>
+                {visiveis.map((u) => (
+                  <TR key={u.id}>
+                    <TD className="font-medium">{u.nome}</TD>
+                    <TD>{u.cnpj ?? '—'}</TD>
+                    <TD className="max-w-80 truncate">{u.endereco ?? '—'}</TD>
+                    <TD>
+                      <AtivoBadge ativo={u.ativo} />
+                    </TD>
+                    <TD>
+                      <RowActions
+                        onEdit={() => {
+                          setEditando(u)
+                          setModalOpen(true)
+                        }}
+                        onDelete={() => setExcluindo(u)}
+                      />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
       {modalOpen && (
         <UnidadeFormModal open={modalOpen} onClose={() => setModalOpen(false)} unidade={editando} />
@@ -484,28 +681,21 @@ function RotasTab() {
           }
         />
       ) : (
-        <Table>
-          <THead>
-            <TR>
-              <TH>Nome</TH>
-              <TH>Tipo</TH>
-              <TH>Tolerância (m)</TH>
-              <TH>Duração est. (min)</TH>
-              <TH>Pontos</TH>
-              <TH>Criada em</TH>
-              <TH></TH>
-            </TR>
-          </THead>
-          <TBody>
+        <>
+          {/* Cards empilhados no mobile (<md) */}
+          <div className="space-y-2 md:hidden">
             {data.map((r) => (
-              <TR key={r.id}>
-                <TD className="font-medium">{r.nome ?? '—'}</TD>
-                <TD>{r.tipo}</TD>
-                <TD>{r.raio_tolerancia_m}</TD>
-                <TD>{r.duracao_estimada_min ?? '—'}</TD>
-                <TD>{r.linha?.length ?? 0}</TD>
-                <TD className="whitespace-nowrap">{formatDate(r.criado_em)}</TD>
-                <TD>
+              <div key={r.id} className="rounded-lg border bg-card px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">{r.nome ?? '—'}</span>
+                  <span className="text-xs text-muted-foreground">{r.tipo}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Tolerância {r.raio_tolerancia_m} m · {r.linha?.length ?? 0} pontos
+                  {r.duracao_estimada_min != null && ` · ~${r.duracao_estimada_min} min`}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>Criada em {formatDate(r.criado_em)}</span>
                   <RowActions
                     onEdit={() => {
                       setEditando(r)
@@ -513,11 +703,48 @@ function RotasTab() {
                     }}
                     onDelete={() => setExcluindo(r)}
                   />
-                </TD>
-              </TR>
+                </div>
+              </div>
             ))}
-          </TBody>
-        </Table>
+          </div>
+
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Nome</TH>
+                  <TH>Tipo</TH>
+                  <TH>Tolerância (m)</TH>
+                  <TH>Duração est. (min)</TH>
+                  <TH>Pontos</TH>
+                  <TH>Criada em</TH>
+                  <TH></TH>
+                </TR>
+              </THead>
+              <TBody>
+                {data.map((r) => (
+                  <TR key={r.id}>
+                    <TD className="font-medium">{r.nome ?? '—'}</TD>
+                    <TD>{r.tipo}</TD>
+                    <TD>{r.raio_tolerancia_m}</TD>
+                    <TD>{r.duracao_estimada_min ?? '—'}</TD>
+                    <TD>{r.linha?.length ?? 0}</TD>
+                    <TD className="whitespace-nowrap">{formatDate(r.criado_em)}</TD>
+                    <TD>
+                      <RowActions
+                        onEdit={() => {
+                          setEditando(r)
+                          setModalOpen(true)
+                        }}
+                        onDelete={() => setExcluindo(r)}
+                      />
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
       {modalOpen && (
         <RotaFormModal open={modalOpen} onClose={() => setModalOpen(false)} rota={editando} />

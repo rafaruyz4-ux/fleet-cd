@@ -7,6 +7,7 @@ import './index.css'
 import { App } from './App.tsx'
 import { AuthProvider } from '@/lib/auth'
 import { ApiError } from '@/lib/api'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const queryClient = new QueryClient({
   // Rede de segurança global: NENHUMA mutação falha em silêncio. Quem trata o
@@ -33,26 +34,28 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter>
-          <App />
-          <Toaster
-            position="top-right"
-            theme="dark"
-            closeButton
-            toastOptions={{
-              style: {
-                background: 'hsl(219 20% 10% / 0.94)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid hsl(218 12% 22%)',
-                color: 'hsl(216 33% 97%)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
-              },
-            }}
-          />
-        </BrowserRouter>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <BrowserRouter>
+            <App />
+            <Toaster
+              position="top-right"
+              theme="dark"
+              closeButton
+              toastOptions={{
+                style: {
+                  background: 'hsl(219 20% 10% / 0.94)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid hsl(218 12% 22%)',
+                  color: 'hsl(216 33% 97%)',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
+                },
+              }}
+            />
+          </BrowserRouter>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

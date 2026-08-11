@@ -101,6 +101,33 @@ export function NfsTab() {
 
       {nfs.length > 0 && (
         <div className={isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}>
+          {/* Cards empilhados no mobile (<md) */}
+          <div className="space-y-2 md:hidden">
+            {nfs.map((nf) => (
+              <div key={nf.id} className="rounded-lg border bg-card px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">
+                    NF {nf.numero ?? '—'}
+                    {nf.serie && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        Série {nf.serie}
+                      </span>
+                    )}
+                  </span>
+                  <NfStatusBadge status={nf.status} />
+                </div>
+                <div className="mt-1 truncate text-sm text-muted-foreground">
+                  {nf.destinatario_nome ?? '—'}
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Emissão: {formatDate(nf.emitida_em)}</span>
+                  <span>{formatCurrency(nf.valor_total)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block">
           <Table>
             <THead>
               <TR>
@@ -130,6 +157,7 @@ export function NfsTab() {
               ))}
             </TBody>
           </Table>
+          </div>
           <Pagination
             total={data?.total ?? 0}
             limit={LIMIT}

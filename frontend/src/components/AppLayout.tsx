@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
+import { useAlertasNaoVistosCount } from '@/api/hooks'
 import { useAssinaturaSuspensa } from '@/lib/assinatura-suspensa'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,8 @@ function SidebarConteudo({
 }) {
   const { usuario, logout } = useAuth()
   const [trocarSenhaOpen, setTrocarSenhaOpen] = useState(false)
+  // Alertas vivos: contador de não vistos com polling (badge no item Alertas).
+  const alertasNovos = useAlertasNaoVistosCount()
   const grupos: { titulo?: string; itens: NavItem[] }[] = [
     { itens: [{ to: '/', label: 'Início', icon: LayoutDashboard, end: true }] },
     { titulo: 'Operação', itens: GRUPO_OPERACAO },
@@ -87,7 +90,7 @@ function SidebarConteudo({
         {grupos.map((grupo, gi) => (
           <div key={grupo.titulo ?? gi} className="space-y-1">
             {grupo.titulo && (
-              <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+              <p className="font-display px-3 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                 {grupo.titulo}
               </p>
             )}
@@ -108,6 +111,14 @@ function SidebarConteudo({
               >
                 <Icon className="h-4 w-4" />
                 {label}
+                {to === '/alertas' && (alertasNovos.data ?? 0) > 0 && (
+                  <span
+                    className="tabular-nums ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold leading-none text-destructive-foreground"
+                    aria-label={`${alertasNovos.data} alertas não vistos`}
+                  >
+                    {alertasNovos.data! > 99 ? '99+' : alertasNovos.data}
+                  </span>
+                )}
               </NavLink>
             ))}
           </div>
@@ -167,17 +178,57 @@ function BannerAssinaturaSuspensa() {
   )
 }
 
+// Elementos que participam do ciclo de foco dentro do drawer (mesma lista do Modal).
+const FOCAVEIS_DRAWER =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function AppLayout() {
   const [menuAberto, setMenuAberto] = useState(false)
+  const drawerRef = useRef<HTMLElement>(null)
 
   // O drawer fecha ao navegar (onNavigate nos NavLinks) e também no ESC.
+  // Enquanto aberto, é um diálogo: foco inicial dentro, Tab preso (trap, como
+  // no Modal) e foco devolvido a quem abriu ao fechar.
   useEffect(() => {
     if (!menuAberto) return
+    const focoAnterior = document.activeElement as HTMLElement | null
+    const raf = requestAnimationFrame(() => {
+      const el = drawerRef.current
+      if (!el || el.contains(document.activeElement)) return
+      el.querySelector<HTMLElement>(FOCAVEIS_DRAWER)?.focus()
+    })
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuAberto(false)
+      if (e.key === 'Escape') {
+        setMenuAberto(false)
+        return
+      }
+      if (e.key !== 'Tab') return
+      const el = drawerRef.current
+      if (!el) return
+      const focaveis = Array.from(el.querySelectorAll<HTMLElement>(FOCAVEIS_DRAWER)).filter(
+        (f) => f.offsetParent !== null || f === document.activeElement,
+      )
+      if (focaveis.length === 0) return
+      const primeiro = focaveis[0]!
+      const ultimo = focaveis[focaveis.length - 1]!
+      const ativo = document.activeElement
+      const dentro = ativo instanceof HTMLElement && el.contains(ativo)
+      if (e.shiftKey) {
+        if (!dentro || ativo === primeiro) {
+          e.preventDefault()
+          ultimo.focus()
+        }
+      } else if (!dentro || ativo === ultimo) {
+        e.preventDefault()
+        primeiro.focus()
+      }
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', onKey)
+      focoAnterior?.focus?.()
+    }
   }, [menuAberto])
 
   return (
@@ -195,7 +246,13 @@ export function AppLayout() {
             onClick={() => setMenuAberto(false)}
             aria-hidden
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col border-r bg-card shadow-2xl">
+          <aside
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu de navegação"
+            className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col border-r bg-card shadow-2xl"
+          >
             <SidebarConteudo
               onNavigate={() => setMenuAberto(false)}
               onFechar={() => setMenuAberto(false)}
@@ -240,7 +297,7 @@ export function PageHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-card px-4 py-5 sm:px-6">
       <div>
-        <h1 className="font-display text-xl font-bold">{title}</h1>
+        <h1 className="font-display text-[26px] font-bold leading-tight">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}

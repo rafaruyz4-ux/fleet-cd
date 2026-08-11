@@ -61,10 +61,20 @@ export function MultasPage() {
     let novas = 0
     let duplicadas = 0
     const falhas: string[] = []
+    // Progresso num toast persistente (id fixo): o Toaster é global, então o
+    // andamento continua visível mesmo se o usuário navegar para outra tela
+    // enquanto a consulta roda.
+    const TOAST_ID = 'busca-multas-progresso'
     // Sequencial de propósito: o Detran não gosta de rajada e o limite de
     // consultas do plano é checado por chamada.
     for (const [i, v] of consultaveis.entries()) {
-      setProgresso(`Consultando ${v.placa} (${i + 1}/${consultaveis.length})…`)
+      const msg = `Consultando ${v.placa} (${i + 1}/${consultaveis.length})…`
+      setProgresso(msg)
+      toast.loading(msg, {
+        id: TOAST_ID,
+        duration: Infinity,
+        description: 'Pode navegar pelo sistema — avisamos aqui quando terminar.',
+      })
       try {
         const r = await consultar.mutateAsync(v.id)
         novas += r.multasNovas
@@ -78,17 +88,23 @@ export function MultasPage() {
       toast.success(
         `${novas} multa${novas > 1 ? 's' : ''} nova${novas > 1 ? 's' : ''} encontrada${novas > 1 ? 's' : ''}.` +
           (duplicadas > 0 ? ` Outras ${duplicadas} já estavam no sistema.` : ''),
+        { id: TOAST_ID, duration: 8000, description: undefined },
       )
     } else if (falhas.length < consultaveis.length) {
       toast.info(
         duplicadas > 0
           ? `Nenhuma multa nova — ${duplicadas} já estavam no sistema.`
           : 'Nenhuma multa nova encontrada. Boa notícia para a frota.',
+        { id: TOAST_ID, duration: 8000, description: undefined },
       )
+    } else {
+      // Só falhas: o toast de progresso não pode ficar girando para sempre.
+      toast.dismiss(TOAST_ID)
     }
     if (falhas.length > 0) {
       toast.error(
         `A consulta falhou em: ${falhas.join(', ')}. O Detran pode estar instável — tente de novo em instantes.`,
+        { duration: 10_000 },
       )
     }
   }
@@ -180,7 +196,7 @@ export function MultasPage() {
         />
       )}
 
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
           <div className="space-y-1">
             <Label>Revisão</Label>
@@ -240,6 +256,68 @@ export function MultasPage() {
 
         {multas.length > 0 && (
           <div className={isPlaceholderData ? 'opacity-60 transition-opacity' : undefined}>
+            {/* Cards empilhados no mobile (<md) — mesmo padrão da lista de viagens */}
+            <div className="space-y-2 md:hidden">
+              {multas.map((m) => (
+                <div key={m.id} className="rounded-lg border bg-card px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{m.veiculo_placa ?? '—'}</span>
+                    <span className="font-display text-base font-semibold">
+                      {formatCurrency(m.valor)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Auto {m.numero_auto ?? '—'}
+                    {m.motorista_nome && ` · ${m.motorista_nome}`}
+                  </div>
+                  {m.tipo && (
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{m.tipo}</div>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <MultaRevisaoBadge status={m.status_revisao} />
+                    <MultaPagamentoBadge status={m.status_pagamento} />
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {formatDateTime(m.ocorrida_em)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex justify-end gap-2">
+                    {m.comprovante_ext && (
+                      <Button size="sm" variant="ghost" onClick={() => baixarComprovante(m)}>
+                        <FileText className="h-4 w-4" /> Comprovante
+                      </Button>
+                    )}
+                    {m.viagem_id ? (
+                      <Link to={`/viagens/${m.viagem_id}`}>
+                        <Button size="sm" variant="ghost">
+                          <ExternalLink className="h-4 w-4" /> Viagem
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={revincular.isPending}
+                        onClick={() =>
+                          revincular.mutate(m.id, {
+                            onSuccess: (r) => {
+                              if (r.viagem_id) toast.success('Multa vinculada a uma viagem.')
+                              else
+                                toast.info(
+                                  'Nenhuma viagem encontrada para o veículo na data da multa.',
+                                )
+                            },
+                          })
+                        }
+                      >
+                        <Link2 className="h-4 w-4" /> Achar viagem
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block">
             <Table>
               <THead>
                 <TR>
@@ -321,6 +399,7 @@ export function MultasPage() {
                 ))}
               </TBody>
             </Table>
+            </div>
             <Pagination
               total={data?.total ?? 0}
               limit={LIMIT}

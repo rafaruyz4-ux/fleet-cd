@@ -217,7 +217,9 @@ export function TripMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const loadedRef = useRef(false)
-  const markersRef = useRef<maplibregl.Marker[]>([])
+  // Marcadores por id estável: no refetch (15s) o marcador existente só é
+  // reposicionado/atualizado — destruir e recriar fechava o popup aberto.
+  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map())
   const focoMarkerRef = useRef<maplibregl.Marker | null>(null)
   const resizeObsRef = useRef<ResizeObserver | null>(null)
   // Enquadra o trajeto só no PRIMEIRO desenho: os polls seguintes não podem
@@ -330,33 +332,49 @@ export function TripMap({
         map.setPaintProperty('trajeto', 'line-gradient', gradientePorVelocidade(pontos))
       }
 
-      markersRef.current.forEach((m) => m.remove())
-      markersRef.current = []
-
-      const addMarker = (lng: number, lat: number, el: HTMLElement, conteudo: HTMLElement) => {
+      // Reconciliação por id: atualiza posição/conteúdo dos marcadores que
+      // continuam existindo, cria os novos e remove os que sumiram — sem
+      // fechar popups abertos a cada refetch.
+      const vistos = new Set<string>()
+      const upsertMarker = (
+        id: string,
+        lng: number,
+        lat: number,
+        criarEl: () => HTMLElement,
+        conteudo: HTMLElement,
+      ) => {
+        vistos.add(id)
+        const existente = markersRef.current.get(id)
+        if (existente) {
+          existente.setLngLat([lng, lat])
+          existente.getPopup()?.setDOMContent(conteudo)
+          return
+        }
         const popup = new maplibregl.Popup({ offset: 16, closeButton: false, maxWidth: '280px' })
         popup.setDOMContent(conteudo)
-        const m = new maplibregl.Marker({ element: el })
+        const m = new maplibregl.Marker({ element: criarEl() })
           .setLngLat([lng, lat])
           .setPopup(popup)
           .addTo(map)
-        markersRef.current.push(m)
+        markersRef.current.set(id, m)
       }
 
       if (trajetoCoords.length > 0) {
         const first = trajetoCoords[0]!
         const last = trajetoCoords[trajetoCoords.length - 1]!
-        addMarker(
+        upsertMarker(
+          'inicio',
           first[0],
           first[1],
-          elInicio(),
+          elInicio,
           popupInfo('Início do trajeto', '#10b981', [formatDateTime(pontos[0]!.registrado_em)]),
         )
         if (trajetoCoords.length > 1)
-          addMarker(
+          upsertMarker(
+            'posicao-atual',
             last[0],
             last[1],
-            elPosicaoAtual(),
+            elPosicaoAtual,
             popupInfo('Posição atual', '#2563eb', [
               formatDateTime(pontos[pontos.length - 1]!.registrado_em),
             ]),
@@ -366,10 +384,11 @@ export function TripMap({
       for (const a of alertas ?? []) {
         if (a.coordenada) {
           const cor = ALERTA_COR[a.tipo] ?? '#ef4444'
-          addMarker(
+          upsertMarker(
+            `alerta-${a.id}`,
             a.coordenada.lng,
             a.coordenada.lat,
-            elAlerta(cor),
+            () => elAlerta(cor),
             popupInfo(ALERTA_LABEL[a.tipo] ?? a.tipo, cor, [
               a.descricao,
               formatDateTime(a.criado_em),
@@ -380,15 +399,24 @@ export function TripMap({
 
       // Paradas automáticas detectadas (ícone de pausa).
       for (const p of paradasDetectadas ?? []) {
-        addMarker(
+        upsertMarker(
+          `parada-${p.inicio}`,
           p.lng,
           p.lat,
-          elParadaDetectada(),
+          elParadaDetectada,
           popupInfo('Parada detectada', '#64748b', [
             `Parado por ${p.duracao_min} min`,
             `${formatHora(p.inicio)} – ${formatHora(p.fim)}`,
           ]),
         )
+      }
+
+      // Remove marcadores que não existem mais neste desenho.
+      for (const [id, m] of markersRef.current) {
+        if (!vistos.has(id)) {
+          m.remove()
+          markersRef.current.delete(id)
+        }
       }
 
       // Enquadra todos os pontos relevantes — só no primeiro desenho ou pelo

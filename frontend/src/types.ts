@@ -150,6 +150,23 @@ export interface Parada {
   nf_status: string | null
 }
 
+// --- Mapa geral da frota (GET /dashboard/frota-mapa) ---
+/** Última posição conhecida de cada viagem em andamento. */
+export interface FrotaVeiculoPosicao {
+  veiculo_id: string
+  placa: string
+  viagem_id: string
+  motorista_nome: string
+  lat: number
+  lng: number
+  velocidade_kmh: number | null
+  registrado_em: string
+}
+
+export interface FrotaMapaResposta {
+  veiculos: FrotaVeiculoPosicao[]
+}
+
 // --- Telemetria (GPS) ---
 export interface PontoTrajeto {
   lat: number

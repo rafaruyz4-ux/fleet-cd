@@ -41,6 +41,34 @@ export class ApiError extends Error {
   }
 }
 
+// Mensagens amigáveis para falhas de infraestrutura (nada de "Failed to
+// fetch" nem "Unexpected token '<'" na cara do usuário).
+const MSG_SEM_CONEXAO =
+  'Não foi possível conectar ao servidor. Verifique a internet e tente de novo.'
+const MSG_SERVIDOR = 'O servidor está com problema. Tente de novo em instantes.'
+
+// Sinal lido pela tela de login: a sessão caiu por refresh expirado (não é
+// um logout voluntário). sessionStorage: some ao fechar a aba.
+export const SESSAO_EXPIRADA_KEY = 'fleet.sessaoExpirada'
+
+function marcarSessaoExpirada() {
+  try {
+    sessionStorage.setItem(SESSAO_EXPIRADA_KEY, '1')
+  } catch {
+    // sessionStorage indisponível (modo privado antigo) — segue sem o aviso.
+  }
+}
+
+/** fetch com falha de rede traduzida (mantém AbortError intacto p/ React Query). */
+async function fetchSeguro(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new ApiError(0, MSG_SEM_CONEXAO, undefined)
+  }
+}
+
 /** Chamado quando o refresh falha — a app limpa o estado e volta ao login. */
 let onAuthFailure: (() => void) | null = null
 export function setOnAuthFailure(fn: () => void) {
@@ -93,7 +121,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (token) headers['Authorization'] = `Bearer ${token}`
-    return fetch(`${BASE}${path}`, {
+    return fetchSeguro(`${BASE}${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -109,6 +137,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       res = await send(tokenStore.getAccess())
     } else {
       tokenStore.clear()
+      marcarSessaoExpirada()
       onAuthFailure?.()
       throw new ApiError(401, 'Sessão expirada')
     }
@@ -120,7 +149,16 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   }
 
   const text = await res.text()
-  const data = text ? JSON.parse(text) : undefined
+  // Resposta não-JSON (ex.: página de erro HTML do Nginx num 502) não pode
+  // virar "Unexpected token '<'" na tela.
+  let data: unknown
+  let jsonValido = true
+  try {
+    data = text ? JSON.parse(text) : undefined
+  } catch {
+    data = undefined
+    jsonValido = false
+  }
 
   observarAssinatura(path, res.status, data)
 
@@ -130,8 +168,13 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     const message =
       (obj && typeof obj.error === 'string' && obj.error) ||
       (obj && typeof obj.message === 'string' && obj.message) ||
-      `Erro ${res.status}`
+      (res.status >= 500 || !jsonValido ? MSG_SERVIDOR : `Erro ${res.status}`)
     throw new ApiError(res.status, message, data)
+  }
+
+  if (!jsonValido) {
+    // 2xx com corpo ilegível = proxy/servidor doente respondendo lixo.
+    throw new ApiError(res.status, MSG_SERVIDOR, undefined)
   }
 
   return data as T
@@ -154,7 +197,7 @@ export const api = {
  */
 export async function baixarArquivo(path: string, nomeArquivo: string): Promise<void> {
   const send = (token: string | null) =>
-    fetch(`${BASE}${path}`, {
+    fetchSeguro(`${BASE}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
 
@@ -163,6 +206,7 @@ export async function baixarArquivo(path: string, nomeArquivo: string): Promise<
     const ok = await refreshOnce()
     if (!ok) {
       tokenStore.clear()
+      marcarSessaoExpirada()
       onAuthFailure?.()
       throw new ApiError(401, 'Sessão expirada')
     }
@@ -179,7 +223,8 @@ export async function baixarArquivo(path: string, nomeArquivo: string): Promise<
     observarAssinatura(path, res.status, data)
     const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : undefined
     const message =
-      (obj && typeof obj.error === 'string' && obj.error) || `Erro ${res.status} ao exportar`
+      (obj && typeof obj.error === 'string' && obj.error) ||
+      (res.status >= 500 ? MSG_SERVIDOR : `Erro ${res.status} ao exportar`)
     throw new ApiError(res.status, message, data)
   }
 

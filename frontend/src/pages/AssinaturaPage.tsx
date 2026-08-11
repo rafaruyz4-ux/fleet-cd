@@ -59,6 +59,21 @@ function precoMensal(centavos: number): string {
 }
 
 /**
+ * Procura um link de pagamento (fatura/boleto do Asaas) na resposta da troca
+ * de plano. O contrato tipado não garante o campo, então a leitura é
+ * defensiva: aceita linkFatura/linkBoleto/invoiceUrl/bankSlipUrl no topo.
+ */
+function extrairLinkPagamento(resposta: unknown): string | null {
+  if (!resposta || typeof resposta !== 'object') return null
+  const obj = resposta as Record<string, unknown>
+  for (const campo of ['linkFatura', 'linkBoleto', 'invoiceUrl', 'bankSlipUrl']) {
+    const v = obj[campo]
+    if (typeof v === 'string' && /^https?:\/\//.test(v)) return v
+  }
+  return null
+}
+
+/**
  * Vencimento vem como data pura (YYYY-MM-DD); formata sem passar por Date
  * para não sofrer o deslocamento de fuso (UTC−3 jogaria para o dia anterior).
  */
@@ -87,10 +102,30 @@ export function AssinaturaPage() {
     setErroTroca(null)
     setFaixaAlvo(faixa)
     try {
-      await mudarPlano.mutateAsync(faixa)
-      toast.success(
-        `Troca para o plano ${PLANOS_UI[faixa].nome} solicitada. Ela entra em vigor após a confirmação do pagamento.`,
-      )
+      const resposta = await mudarPlano.mutateAsync(faixa)
+      // SEM beco sem saída: depois de confirmar a troca, o usuário é levado
+      // direto ao pagamento — aba Faturas + (se a API devolver) o link do
+      // boleto/fatura do Asaas aberto na hora.
+      const linkPagamento = extrairLinkPagamento(resposta)
+      setAba('faturas')
+      if (linkPagamento) {
+        window.open(linkPagamento, '_blank', 'noopener')
+        toast.success(
+          `Troca para o plano ${PLANOS_UI[faixa].nome} solicitada. Abrimos a fatura para pagamento em outra aba.`,
+          {
+            duration: 10_000,
+            action: { label: 'Abrir de novo', onClick: () => window.open(linkPagamento, '_blank', 'noopener') },
+          },
+        )
+      } else {
+        toast.success(
+          `Troca para o plano ${PLANOS_UI[faixa].nome} solicitada. Pague a fatura para o novo plano entrar em vigor.`,
+          {
+            duration: 10_000,
+            action: { label: 'Ver faturas', onClick: () => setAba('faturas') },
+          },
+        )
+      }
     } catch (err) {
       setErroTroca(
         err instanceof ApiError ? err.message : 'Não foi possível trocar de plano. Tente de novo.',
@@ -107,10 +142,14 @@ export function AssinaturaPage() {
       <PageHeader title="Assinatura" description="Seu plano, consumo e cobrança mensal." />
 
       <div className="space-y-4 p-6">
-        <div className="flex gap-1 overflow-x-auto border-b">
+        <div role="tablist" aria-label="Seções da assinatura" className="flex gap-1 overflow-x-auto border-b">
           {ABAS.map((a) => (
             <button
               key={a.key}
+              role="tab"
+              id={`tab-assinatura-${a.key}`}
+              aria-selected={aba === a.key}
+              aria-controls={`panel-assinatura-${a.key}`}
               onClick={() => setAba(a.key)}
               className={cn(
                 '-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors',
@@ -126,6 +165,7 @@ export function AssinaturaPage() {
 
         <DataState isLoading={isLoading} error={error} loadingLabel="Carregando assinatura…" />
 
+        <div role="tabpanel" id={`panel-assinatura-${aba}`} aria-labelledby={`tab-assinatura-${aba}`}>
         {assinatura && aba === 'plano' && (
           <div className="space-y-4">
             <Card>
@@ -198,6 +238,7 @@ export function AssinaturaPage() {
         )}
 
         {aba === 'faturas' && <FaturasTab />}
+        </div>
       </div>
 
       {/* Confirmação da troca de plano: mostra o valor e o aviso do pagamento. */}
