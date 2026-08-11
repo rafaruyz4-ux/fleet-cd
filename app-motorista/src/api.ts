@@ -87,6 +87,9 @@ async function chamar<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 401) {
     const novo = await renovarAccessToken();
     if (novo) res = await fazer(novo);
+    // 401 mesmo depois do refresh = sessão vencida de verdade (não é "sem
+    // sinal"). O erro sai com status 401 para quem chamou tratar diferente.
+    if (res.status === 401) throw new ApiError(401, 'Sua sessão venceu — entre de novo.');
   }
   if (!res.ok) throw new ApiError(res.status, await lerErro(res));
   return res.json();

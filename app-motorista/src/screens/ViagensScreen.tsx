@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { ApiError, getMinhasViagens, iniciarViagem, type MinhaViagem } from '../api';
 import { VetraLogo } from '../logo';
+import { pedirPermissoes } from '../rastreio';
 import { getMotoristaNome } from '../storage';
 import { cores } from '../theme';
 import { Botao, Cartao, MensagemErro } from '../ui';
@@ -82,6 +83,17 @@ export function ViagensScreen({
       setErro('');
       setIniciando(viagem.id);
       try {
+        // Pré-voo: resolve as permissões ANTES de carimbar a saída no sistema —
+        // senão a viagem nasce "iniciada" sem nenhum ponto de GPS chegando.
+        const permissao = await pedirPermissoes();
+        if (permissao === 'sem_permissao') {
+          setErro(
+            'Para iniciar, permita a localização do app: Configurações > Apps > Nexus Frota > Permissões.',
+          );
+          return;
+        }
+        // 'sem_segundo_plano' deixa iniciar mesmo assim: o painel da viagem
+        // avisa e coleta em modo reduzido (só com o app aberto).
         await iniciarViagem(viagem.id);
         aoAbrirViagem({ ...viagem, iniciada_em: new Date().toISOString() });
       } catch (e) {
