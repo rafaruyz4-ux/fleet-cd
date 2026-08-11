@@ -128,6 +128,18 @@ export async function mudarPlano(empresaId: string, faixa: PlanoFaixa): Promise<
     subscriptionId: e.asaas_subscription_id,
   });
 
+  // Grava os ids do Asaas IMEDIATAMENTE, em escrita separada: a assinatura já
+  // existe lá — se qualquer passo seguinte falhar e os ids se perderem, a
+  // próxima tentativa criaria uma SEGUNDA assinatura ativa (cobrança dobrada)
+  // e o webhook de pagamento não encontraria a empresa.
+  await query(
+    `UPDATE empresas
+       SET asaas_customer_id = COALESCE(asaas_customer_id, $1),
+           asaas_subscription_id = $2
+     WHERE id = $3`,
+    [customerId, subscriptionId, empresaId],
+  );
+
   // Suspensa/cancelada permanece bloqueada até o pagamento; nos demais casos o
   // status vira 'pendente' (não bloqueia — o plano ATUAL segue valendo).
   const novoStatus = e.plano === 'suspenso' || e.plano === 'cancelado' ? e.plano : 'pendente';
@@ -135,11 +147,9 @@ export async function mudarPlano(empresaId: string, faixa: PlanoFaixa): Promise<
   await query(
     `UPDATE empresas
        SET plano_faixa_pendente = $1,
-           plano = $2,
-           asaas_customer_id = COALESCE(asaas_customer_id, $3),
-           asaas_subscription_id = $4
-     WHERE id = $5`,
-    [faixa, novoStatus, customerId, subscriptionId, empresaId],
+           plano = $2
+     WHERE id = $3`,
+    [faixa, novoStatus, empresaId],
   );
   invalidarCacheEmpresa(empresaId);
 

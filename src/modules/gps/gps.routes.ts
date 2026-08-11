@@ -1,12 +1,14 @@
 import { Router, type Request, type Response } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
-import { empresaBloqueada, motoristaEstaAtivo, statusDaEmpresa } from '../../middleware/acesso';
+import { acessoDoMotorista, empresaBloqueada, statusDaEmpresa } from '../../middleware/acesso';
 import { requireAuth, requireMotorista } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
 import { verifyAccessToken } from '../../utils/jwt';
 import { idParamSchema, ingestPosicoesSchema } from './gps.schemas';
 import * as service from './gps.service';
 import * as viagensService from '../viagens/viagens.service';
+import * as veiculosService from '../veiculos/veiculos.service';
+import { criarViagemMotoristaSchema } from '../viagens/viagens.schemas';
 
 // Rotas do APP (motorista autenticado). Montadas em /api/app.
 export const appRouter = Router();
@@ -21,6 +23,34 @@ appRouter.get(
   }),
 );
 
+// Veículos ativos — pro motorista escolher ao criar a própria viagem.
+appRouter.get(
+  '/veiculos',
+  asyncHandler(async (req, res) => {
+    const todos = await veiculosService.list(req.user!.empresaId);
+    res.json(
+      todos.filter((v) => v.ativo).map((v) => ({ id: v.id, placa: v.placa, modelo: v.modelo })),
+    );
+  }),
+);
+
+// Motorista cria a própria viagem e já sai dirigindo (sem depender do gestor).
+appRouter.post(
+  '/viagens',
+  validate({ body: criarViagemMotoristaSchema }),
+  asyncHandler(async (req, res) => {
+    res
+      .status(201)
+      .json(
+        await viagensService.criarEIniciarPeloMotorista(
+          req.user!.empresaId,
+          req.user!.sub,
+          req.body,
+        ),
+      );
+  }),
+);
+
 // Motorista carimba a saída da própria viagem (botão "Iniciar viagem" do app).
 appRouter.post(
   '/viagens/:id/iniciar',
@@ -28,6 +58,21 @@ appRouter.post(
   asyncHandler(async (req, res) => {
     res.json(
       await viagensService.iniciarPeloMotorista(req.user!.empresaId, req.params.id!, req.user!.sub),
+    );
+  }),
+);
+
+// Motorista encerra a própria viagem (fim do expediente, sem gestor).
+appRouter.post(
+  '/viagens/:id/encerrar',
+  validate({ params: idParamSchema }),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await viagensService.encerrarPeloMotorista(
+        req.user!.empresaId,
+        req.params.id!,
+        req.user!.sub,
+      ),
     );
   }),
 );
@@ -68,9 +113,9 @@ appRouter.post(
 export const deviceRouter = Router();
 
 // Resolve o motorista pelo token vindo do cabeçalho ou da query. Este router
-// NÃO passa pelo requireAuth, então repete as mesmas travas: motorista demitido
-// (device token de 365d não é revogável por si só) e empresa com assinatura
-// suspensa param de ingerir GPS. Responde o erro e retorna null se não passar.
+// NÃO passa pelo requireAuth, então repete as mesmas travas: motorista demitido,
+// device token de versão antiga (revogado via token_version) e empresa com
+// assinatura suspensa param de ingerir GPS. Responde o erro e retorna null.
 async function motoristaDoDispositivo(
   req: Request,
   res: Response,
@@ -85,11 +130,13 @@ async function motoristaDoDispositivo(
   const token = tokenHeader || tokenCustom || tokenQuery;
   let motoristaId: string | null = null;
   let empresaId: string | null = null;
+  let tokenVersion = 0;
   try {
     const payload = verifyAccessToken(token);
     if (payload.tipo === 'motorista') {
       motoristaId = payload.sub;
       empresaId = payload.empresaId;
+      tokenVersion = payload.tokenVersion ?? 0;
     }
   } catch {
     /* token inválido tratado abaixo */
@@ -98,8 +145,14 @@ async function motoristaDoDispositivo(
     res.status(401).json({ result: 'error', error: 'Token de dispositivo inválido' });
     return null;
   }
-  if (!(await motoristaEstaAtivo(motoristaId))) {
+  const acesso = await acessoDoMotorista(motoristaId);
+  if (!acesso.ativo) {
     res.status(401).json({ result: 'error', error: 'Motorista inativo ou sem acesso' });
+    return null;
+  }
+  // Token de versão antiga = revogado pelo gestor (celular perdido/roubado).
+  if (tokenVersion !== acesso.tokenVersion) {
+    res.status(401).json({ result: 'error', error: 'Token revogado — gere um novo no dashboard' });
     return null;
   }
   if (empresaBloqueada(await statusDaEmpresa(empresaId))) {

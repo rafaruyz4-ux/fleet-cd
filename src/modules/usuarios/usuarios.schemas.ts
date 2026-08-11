@@ -1,11 +1,13 @@
 import { z } from 'zod';
+import { schemaSenha } from '../../utils/senha';
 
 // Gestão de usuários do PRÓPRIO tenant (admin da empresa-cliente).
 // Diferente do backoffice (empresas.schemas), aqui tudo é limitado à empresa
 // do usuário autenticado.
 
 const papel = z.enum(['admin', 'gestor']);
-const senha = z.string().min(8, 'A senha precisa ter ao menos 8 caracteres').max(200);
+// Política de senha central (utils/senha): 10+, ou 8+ com letra e número.
+const senha = schemaSenha(200);
 
 // Criação de usuário pelo admin da empresa. A senha inicial é digitada/gerada
 // no dashboard e mostrada UMA vez (mesmo padrão do backoffice: sem e-mail de

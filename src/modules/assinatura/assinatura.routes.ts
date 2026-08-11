@@ -1,10 +1,22 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { requireAuth, requireUsuario, tenantId } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
+import { webhookLimiter } from '../../middleware/rateLimit';
 import { env } from '../../config/env';
 import { mudarPlanoSchema } from './assinatura.schemas';
 import * as service from './assinatura.service';
+
+// Comparação em tempo constante: o !== comum retorna no primeiro byte errado,
+// o que permite adivinhar o token medindo o tempo de resposta (timing attack).
+// O hash SHA-256 iguala os tamanhos, requisito do timingSafeEqual.
+function tokenConfere(recebido: unknown, esperado: string): boolean {
+  if (typeof recebido !== 'string' || recebido.length === 0) return false;
+  const a = createHash('sha256').update(recebido).digest();
+  const b = createHash('sha256').update(esperado).digest();
+  return timingSafeEqual(a, b);
+}
 
 // --- Assinatura da própria empresa (gestor autenticado) ---
 export const assinaturaRouter = Router();
@@ -41,12 +53,12 @@ export const asaasWebhookRouter = Router();
 
 asaasWebhookRouter.post(
   '/asaas',
+  webhookLimiter, // limite próprio: endpoint público, alvo natural de abuso
   asyncHandler(async (req, res) => {
     // Se um token de webhook está configurado, exige que bata (o Asaas manda
     // no cabeçalho asaas-access-token). Sem token configurado, aceita (dev).
     if (env.asaas.webhookToken) {
-      const recebido = req.headers['asaas-access-token'];
-      if (recebido !== env.asaas.webhookToken) {
+      if (!tokenConfere(req.headers['asaas-access-token'], env.asaas.webhookToken)) {
         res.status(401).json({ error: 'token de webhook inválido' });
         return;
       }

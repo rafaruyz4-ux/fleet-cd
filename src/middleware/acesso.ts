@@ -20,8 +20,13 @@ export interface StatusEmpresa {
   ativo: boolean;
 }
 
+export interface AcessoMotorista {
+  ativo: boolean;
+  tokenVersion: number; // motoristas.token_version — revogação de device tokens
+}
+
 const cacheEmpresa = new Map<string, Cacheado<StatusEmpresa>>();
-const cacheMotorista = new Map<string, Cacheado<boolean>>();
+const cacheMotorista = new Map<string, Cacheado<AcessoMotorista>>();
 
 function lembrado<T>(mapa: Map<string, Cacheado<T>>, chave: string): T | undefined {
   const hit = mapa.get(chave);
@@ -61,16 +66,27 @@ export function erroAssinaturaSuspensa(): AppError {
 }
 
 /**
- * Motorista ainda está ativo? (com cache de ~60s). É a revogação prática do
- * device token (JWT de 365 dias): motorista demitido → soft delete → 401 aqui.
+ * Situação de acesso do motorista (com cache de ~60s): ativo + versão atual
+ * dos tokens. É a revogação prática do device token (JWT de 365 dias):
+ *  - demitido → soft delete → ativo=false → 401;
+ *  - celular perdido → token_version incrementado → tokens antigos → 401.
  */
-export async function motoristaEstaAtivo(motoristaId: string): Promise<boolean> {
+export async function acessoDoMotorista(motoristaId: string): Promise<AcessoMotorista> {
   const hit = lembrado(cacheMotorista, motoristaId);
   if (hit !== undefined) return hit;
-  const row = await queryOne<{ ativo: boolean }>('SELECT ativo FROM motoristas WHERE id = $1', [
-    motoristaId,
-  ]);
-  return lembrar(cacheMotorista, motoristaId, row?.ativo === true);
+  const row = await queryOne<{ ativo: boolean; token_version: number }>(
+    'SELECT ativo, token_version FROM motoristas WHERE id = $1',
+    [motoristaId],
+  );
+  return lembrar(cacheMotorista, motoristaId, {
+    ativo: row?.ativo === true,
+    tokenVersion: row?.token_version ?? 0,
+  });
+}
+
+/** Motorista ainda está ativo? (atalho sobre acessoDoMotorista). */
+export async function motoristaEstaAtivo(motoristaId: string): Promise<boolean> {
+  return (await acessoDoMotorista(motoristaId)).ativo;
 }
 
 /** Chame ao mudar plano/status/ativo da empresa (webhook, backoffice, upgrade). */

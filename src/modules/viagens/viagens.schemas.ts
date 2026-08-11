@@ -22,6 +22,12 @@ export const updateViagemSchema = z
   })
   .partial();
 
+// App/web do motorista: criar a própria viagem (motorista_id vem do token).
+export const criarViagemMotoristaSchema = z.object({
+  veiculo_id: uuid,
+  km_inicial: z.number().int().nonnegative().optional(),
+});
+
 export const iniciarViagemSchema = z.object({
   iniciada_em: z.coerce.date().optional(),
   km_inicial: z.number().int().nonnegative().optional(),
@@ -73,6 +79,7 @@ export const idParamSchema = z.object({ id: uuid });
 export const paradaParamsSchema = z.object({ id: uuid, paradaId: uuid });
 
 export type CreateViagemInput = z.infer<typeof createViagemSchema>;
+export type CriarViagemMotoristaInput = z.infer<typeof criarViagemMotoristaSchema>;
 export type UpdateViagemInput = z.infer<typeof updateViagemSchema>;
 export type IniciarViagemInput = z.infer<typeof iniciarViagemSchema>;
 export type EncerrarViagemInput = z.infer<typeof encerrarViagemSchema>;

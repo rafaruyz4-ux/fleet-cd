@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { api, bearer, cpfUnico, loginGestor, placaUnica } from './helpers';
+import { api, bearer, cpfUnico, criarMotorista, criarVeiculo, loginGestor, placaUnica } from './helpers';
 
 // CRUD + validação das telas de cadastro: veículos, motoristas, unidades, rotas.
 // Tudo autenticado como gestor. Geradores únicos evitam colisão entre casos.
 // Observações de delete confirmadas no service de cada módulo:
-//   veículos/motoristas/unidades = SOFT delete (ativo=false), 204, continuam na listagem.
+//   veículos/motoristas/unidades = HARD delete quando não há histórico (somem de vez);
+//     com viagens/multas vinculadas (FK 23503) caem p/ soft delete (ativo=false).
 //   rotas = HARD delete (DELETE FROM), 204, somem da listagem e getById vira 404.
 // As listas de todos os módulos devolvem ARRAY puro (sem envelope {data,total}).
 
@@ -64,7 +65,7 @@ describe('cadastro de veículos (CRUD + validação)', () => {
     expect(res.body.modelo).toBe('Volvo FH');
   });
 
-  it('remove (DELETE) → 204; soft-delete deixa o item ativo=false (segue na listagem)', async () => {
+  it('remove (DELETE) sem histórico → 204; hard-delete some da listagem e getById vira 404', async () => {
     const created = await api()
       .post('/api/veiculos')
       .set('Authorization', h())
@@ -72,14 +73,34 @@ describe('cadastro de veículos (CRUD + validação)', () => {
     const id = created.body.id;
     const del = await api().delete(`/api/veiculos/${id}`).set('Authorization', h());
     expect(del.status).toBe(204);
-    // soft delete: ainda existe e ainda aparece na listagem, agora inativo.
     const get = await api().get(`/api/veiculos/${id}`).set('Authorization', h());
-    expect(get.status).toBe(200);
-    expect(get.body.ativo).toBe(false);
+    expect(get.status).toBe(404);
     const list = await api().get('/api/veiculos').set('Authorization', h());
-    const found = list.body.find((v: { id: string }) => v.id === id);
-    expect(found).toBeTruthy();
-    expect(found.ativo).toBe(false);
+    expect(list.body.some((v: { id: string }) => v.id === id)).toBe(false);
+  });
+
+  it('remove (DELETE) com histórico (viagem) → 204; fallback soft-delete deixa ativo=false', async () => {
+    const veiculoId = await criarVeiculo(token);
+    const { id: motoristaId } = await criarMotorista(token);
+    const viagem = await api()
+      .post('/api/viagens')
+      .set('Authorization', h())
+      .send({ veiculo_id: veiculoId, motorista_id: motoristaId, km_inicial: 1 });
+    expect(viagem.status).toBe(201);
+
+    // veículo com viagem vinculada: não pode sumir, cai p/ soft delete.
+    const delV = await api().delete(`/api/veiculos/${veiculoId}`).set('Authorization', h());
+    expect(delV.status).toBe(204);
+    const getV = await api().get(`/api/veiculos/${veiculoId}`).set('Authorization', h());
+    expect(getV.status).toBe(200);
+    expect(getV.body.ativo).toBe(false);
+
+    // mesmo comportamento para o motorista da viagem.
+    const delM = await api().delete(`/api/motoristas/${motoristaId}`).set('Authorization', h());
+    expect(delM.status).toBe(204);
+    const getM = await api().get(`/api/motoristas/${motoristaId}`).set('Authorization', h());
+    expect(getM.status).toBe(200);
+    expect(getM.body.ativo).toBe(false);
   });
 
   it('validação: placa fora do regex → 400', async () => {
@@ -159,7 +180,7 @@ describe('cadastro de motoristas (CRUD + validação)', () => {
     expect(res.body.nome).toBe('Pedro Depois');
   });
 
-  it('remove (DELETE) → 204; soft-delete deixa o item ativo=false (segue na listagem)', async () => {
+  it('remove (DELETE) sem histórico → 204; hard-delete some da listagem e getById vira 404', async () => {
     const created = await api()
       .post('/api/motoristas')
       .set('Authorization', h())
@@ -168,12 +189,9 @@ describe('cadastro de motoristas (CRUD + validação)', () => {
     const del = await api().delete(`/api/motoristas/${id}`).set('Authorization', h());
     expect(del.status).toBe(204);
     const get = await api().get(`/api/motoristas/${id}`).set('Authorization', h());
-    expect(get.status).toBe(200);
-    expect(get.body.ativo).toBe(false);
+    expect(get.status).toBe(404);
     const list = await api().get('/api/motoristas').set('Authorization', h());
-    const found = list.body.find((m: { id: string }) => m.id === id);
-    expect(found).toBeTruthy();
-    expect(found.ativo).toBe(false);
+    expect(list.body.some((m: { id: string }) => m.id === id)).toBe(false);
   });
 
   it('validação: cpf inválido → 400', async () => {
@@ -245,7 +263,7 @@ describe('cadastro de unidades (CRUD + validação)', () => {
     expect(res.body.endereco).toBe('Avenida Nova, 999');
   });
 
-  it('remove (DELETE) → 204; soft-delete deixa o item ativo=false (segue na listagem)', async () => {
+  it('remove (DELETE) sem histórico → 204; hard-delete some da listagem e getById vira 404', async () => {
     const created = await api()
       .post('/api/unidades')
       .set('Authorization', h())
@@ -254,12 +272,9 @@ describe('cadastro de unidades (CRUD + validação)', () => {
     const del = await api().delete(`/api/unidades/${id}`).set('Authorization', h());
     expect(del.status).toBe(204);
     const get = await api().get(`/api/unidades/${id}`).set('Authorization', h());
-    expect(get.status).toBe(200);
-    expect(get.body.ativo).toBe(false);
+    expect(get.status).toBe(404);
     const list = await api().get('/api/unidades').set('Authorization', h());
-    const found = list.body.find((u: { id: string }) => u.id === id);
-    expect(found).toBeTruthy();
-    expect(found.ativo).toBe(false);
+    expect(list.body.some((u: { id: string }) => u.id === id)).toBe(false);
   });
 
   it('validação: cnpj inválido → 400', async () => {

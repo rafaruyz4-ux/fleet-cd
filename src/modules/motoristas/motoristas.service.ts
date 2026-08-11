@@ -113,11 +113,18 @@ export async function gerarDeviceToken(
   if (!motorista.ativo) {
     throw AppError.badRequest('Motorista inativo não pode receber token de dispositivo');
   }
+  // Versão atual dos tokens: carimbada no payload — incrementá-la (revogação)
+  // derruba este token mesmo dentro do prazo de 365 dias.
+  const versao = await queryOne<{ token_version: number }>(
+    'SELECT token_version FROM motoristas WHERE id = $1 AND empresa_id = $2',
+    [id, empresaId],
+  );
   const deviceToken = signDeviceToken({
     sub: motorista.id,
     tipo: 'motorista',
     empresaId,
     cpf: motorista.cpf,
+    tokenVersion: versao?.token_version ?? 0,
   });
   return {
     deviceToken,
@@ -126,14 +133,47 @@ export async function gerarDeviceToken(
   };
 }
 
-export async function remove(empresaId: string, id: string): Promise<void> {
-  // Soft delete: motoristas têm histórico (viagens, multas) e não devem sumir.
-  const row = await queryOne<{ id: string }>(
-    'UPDATE motoristas SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
+/**
+ * Revoga TODOS os tokens já emitidos do motorista (celular perdido/roubado):
+ * incrementa token_version — os tokens antigos carregam a versão anterior e
+ * passam a ser recusados. O motorista volta a acessar com um login novo (ou
+ * um device token novo gerado pelo gestor).
+ */
+export async function revogarTokens(
+  empresaId: string,
+  id: string,
+): Promise<{ ok: true; token_version: number }> {
+  const row = await queryOne<{ token_version: number }>(
+    `UPDATE motoristas SET token_version = token_version + 1
+      WHERE id = $1 AND empresa_id = $2
+      RETURNING token_version`,
     [id, empresaId],
   );
-  if (!row) {
-    throw AppError.notFound('Motorista não encontrado');
+  if (!row) throw AppError.notFound('Motorista não encontrado');
+  // A revogação precisa valer já (o cache de acesso guarda a versão por ~60s).
+  invalidarCacheMotorista(id);
+  return { ok: true, token_version: row.token_version };
+}
+
+export async function remove(empresaId: string, id: string): Promise<void> {
+  // Hard delete quando não há histórico; com viagens/multas vinculadas (FK 23503)
+  // o registro é preservado e apenas inativado.
+  try {
+    const row = await queryOne<{ id: string }>(
+      'DELETE FROM motoristas WHERE id = $1 AND empresa_id = $2 RETURNING id',
+      [id, empresaId],
+    );
+    if (!row) {
+      throw AppError.notFound('Motorista não encontrado');
+    }
+  } catch (err) {
+    if ((err as { code?: string }).code !== '23503') {
+      throw err;
+    }
+    await queryOne(
+      'UPDATE motoristas SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
+      [id, empresaId],
+    );
   }
   // Corta o acesso do app/device token imediatamente (cache de ~60s).
   invalidarCacheMotorista(id);

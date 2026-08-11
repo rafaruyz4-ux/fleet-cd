@@ -92,11 +92,14 @@ export const env = {
     remetente: optional('SMTP_REMETENTE', 'Fleet CD <nao-responda@fleetcd.local>'),
   },
 
-  // Worker de detecção de "sem GPS" (veículo que parou de transmitir).
+  // Worker de detecção de silêncio de GPS. Dois limites:
+  //  - limiteMin: viagem iniciada que NUNCA transmitiu (alerta sem_gps);
+  //  - semSinalLimiteMin: viagem que transmitia e FICOU MUDA (alerta sem_sinal).
   workerSemGps: {
     enabled: optional('WORKER_SEM_GPS_ENABLED', 'true') !== 'false',
     intervaloMs: numberEnv('WORKER_SEM_GPS_INTERVALO_S', '60') * 1000,
     limiteMin: numberEnv('WORKER_SEM_GPS_LIMITE_MIN', '10'),
+    semSinalLimiteMin: numberEnv('WORKER_SEM_SINAL_LIMITE_MIN', '10'),
   },
 
   // Cobrança via Asaas. Sem ASAAS_API_KEY o sistema roda em "modo simulado":

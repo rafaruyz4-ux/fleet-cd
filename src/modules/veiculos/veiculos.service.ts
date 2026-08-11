@@ -84,11 +84,23 @@ export async function update(
 }
 
 export async function remove(empresaId: string, id: string): Promise<void> {
-  const row = await queryOne<{ id: string }>(
-    'UPDATE veiculos SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
-    [id, empresaId],
-  );
-  if (!row) {
-    throw AppError.notFound('Veículo não encontrado');
+  // Hard delete quando não há histórico; com viagens/multas vinculadas (FK 23503)
+  // o registro é preservado e apenas inativado.
+  try {
+    const row = await queryOne<{ id: string }>(
+      'DELETE FROM veiculos WHERE id = $1 AND empresa_id = $2 RETURNING id',
+      [id, empresaId],
+    );
+    if (!row) {
+      throw AppError.notFound('Veículo não encontrado');
+    }
+  } catch (err) {
+    if ((err as { code?: string }).code !== '23503') {
+      throw err;
+    }
+    await queryOne(
+      'UPDATE veiculos SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
+      [id, empresaId],
+    );
   }
 }

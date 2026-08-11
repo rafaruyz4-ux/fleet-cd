@@ -42,6 +42,16 @@ motoristasRouter.post(
   }),
 );
 
+// Revoga todos os tokens do motorista (celular perdido/roubado): os tokens já
+// emitidos — inclusive device tokens de 365 dias — param de funcionar na hora.
+motoristasRouter.post(
+  '/:id/revogar-tokens',
+  validate({ params: idParamSchema }),
+  asyncHandler(async (req, res) => {
+    res.json(await service.revogarTokens(tenantId(req), req.params.id!));
+  }),
+);
+
 motoristasRouter.patch(
   '/:id',
   validate({ params: idParamSchema, body: updateMotoristaSchema }),

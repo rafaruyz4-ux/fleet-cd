@@ -78,11 +78,15 @@ interface InfosimplesResposta {
 // As datas da Infosimples vêm no formato brasileiro ("15/03/2026" ou
 // "15/03/2026 08:30"), que new Date() não entende — normalizamos para ISO aqui
 // para o resto do sistema não gravar data inválida no banco.
+// O offset -03:00 vai EXPLÍCITO: os horários dos órgãos são de Brasília, e um
+// ISO sem offset é interpretado no fuso do processo — no container (UTC) a
+// multa entraria 3 horas adiantada, o bastante para o vínculo automático
+// apontar a viagem (e o motorista!) errados.
 function normalizarData(valor: string | undefined): string | undefined {
   if (!valor) return undefined;
   const br = valor.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
   const iso = br
-    ? `${br[3]}-${br[2]}-${br[1]}T${br[4] ?? '00'}:${br[5] ?? '00'}:${br[6] ?? '00'}`
+    ? `${br[3]}-${br[2]}-${br[1]}T${br[4] ?? '00'}:${br[5] ?? '00'}:${br[6] ?? '00'}-03:00`
     : valor;
   return Number.isNaN(new Date(iso).getTime()) ? undefined : iso;
 }
@@ -104,7 +108,12 @@ function mapearMulta(raw: Record<string, unknown>): DebitoMulta | null {
 
   const valorStr = s('valor', 'valor_original', 'valor_infracao');
   const valor = valorStr
-    ? Number(valorStr.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.'))
+    ? Number(
+        valorStr
+          .replace(/[^\d,.-]/g, '')
+          .replace(/\.(?=\d{3})/g, '')
+          .replace(',', '.'),
+      )
     : undefined;
   const pontosStr = s('pontos', 'pontuacao');
   const pontos_cnh = pontosStr ? Number(pontosStr) : undefined;

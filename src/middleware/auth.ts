@@ -3,9 +3,9 @@ import { AppError } from '../errors/AppError';
 import { verifyAccessToken, type AccessTokenPayload, type Papel } from '../utils/jwt';
 import { asyncHandler } from './asyncHandler';
 import {
+  acessoDoMotorista,
   empresaBloqueada,
   erroAssinaturaSuspensa,
-  motoristaEstaAtivo,
   statusDaEmpresa,
 } from './acesso';
 
@@ -57,9 +57,16 @@ export const requireAuth: RequestHandler = asyncHandler(async (req, _res, next) 
   }
 
   // Motorista demitido (soft delete) não usa mais o sistema, mesmo com device
-  // token válido por assinatura/prazo.
-  if (payload.tipo === 'motorista' && !(await motoristaEstaAtivo(payload.sub))) {
-    throw AppError.unauthorized('Motorista inativo ou sem acesso');
+  // token válido por assinatura/prazo. E token de versão antiga (revogado pelo
+  // gestor — celular perdido) também cai aqui, mesmo dentro do prazo.
+  if (payload.tipo === 'motorista') {
+    const acesso = await acessoDoMotorista(payload.sub);
+    if (!acesso.ativo) {
+      throw AppError.unauthorized('Motorista inativo ou sem acesso');
+    }
+    if ((payload.tokenVersion ?? 0) !== acesso.tokenVersion) {
+      throw AppError.unauthorized('Token revogado — faça login novamente');
+    }
   }
 
   // Empresa suspensa/cancelada/inativa: bloqueia tudo, exceto as rotas

@@ -39,3 +39,18 @@ export const authLimiter = rateLimit({
     return `${req.ip}|${id}`;
   },
 });
+
+/**
+ * Limite dedicado do webhook do Asaas: o endpoint é público (sem login) e
+ * protegido só pelo token — este limite barra chuva de POSTs tentando
+ * adivinhar o token ou forçar processamento em massa. O Asaas legítimo manda
+ * poucos eventos por minuto, então 60/min sobra.
+ */
+export const webhookLimiter = rateLimit({
+  windowMs: 60_000, // 1 minuto
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: handler429,
+  skip: () => desligado, // pula o limite inteiro em ambiente de teste
+});

@@ -41,6 +41,60 @@ describe('GPS — token de dispositivo + caminho do celular do motorista', () =>
     expect(res.body.motorista.id).toBe(motoristaId);
   });
 
+  it('motorista lista veículos ativos e cria a própria viagem já iniciada', async () => {
+    const veiculo = await criarVeiculo(token);
+    const { appToken } = await loginMotoristaApp(token);
+
+    const lista = await api().get('/api/app/veiculos').set('Authorization', bearer(appToken));
+    expect(lista.status).toBe(200);
+    expect(lista.body.some((v: { id: string }) => v.id === veiculo)).toBe(true);
+
+    const criada = await api()
+      .post('/api/app/viagens')
+      .set('Authorization', bearer(appToken))
+      .send({ veiculo_id: veiculo });
+    expect(criada.status).toBe(201);
+    expect(criada.body.status).toBe('em_andamento');
+    expect(criada.body.iniciada_em).toBeTruthy();
+
+    // Veículo já rodando: outro motorista não consegue pegá-lo.
+    const { appToken: outroMotorista } = await loginMotoristaApp(token);
+    const repetida = await api()
+      .post('/api/app/viagens')
+      .set('Authorization', bearer(outroMotorista))
+      .send({ veiculo_id: veiculo });
+    expect(repetida.status).toBe(400);
+
+    // Motorista já rodando: não cria segunda viagem nem com outro veículo.
+    const outroVeiculo = await criarVeiculo(token);
+    const segunda = await api()
+      .post('/api/app/viagens')
+      .set('Authorization', bearer(appToken))
+      .send({ veiculo_id: outroVeiculo });
+    expect(segunda.status).toBe(400);
+
+    // Gestor (token de usuário) não usa a rota do app.
+    const comoGestor = await api()
+      .post('/api/app/viagens')
+      .set('Authorization', h())
+      .send({ veiculo_id: veiculo });
+    expect(comoGestor.status).toBe(403);
+
+    // Encerrando a própria viagem, o ciclo reabre: dá pra criar a próxima.
+    const enc = await api()
+      .post(`/api/app/viagens/${criada.body.id}/encerrar`)
+      .set('Authorization', bearer(appToken))
+      .send({});
+    expect(enc.status).toBe(200);
+    expect(enc.body.status).toBe('encerrada');
+
+    const proxima = await api()
+      .post('/api/app/viagens')
+      .set('Authorization', bearer(appToken))
+      .send({ veiculo_id: veiculo });
+    expect(proxima.status).toBe(201);
+  });
+
   it('POST /api/app/posicoes (sem id) grava na viagem em_andamento do motorista', async () => {
     const { appToken } = await cenario();
     const res = await api()

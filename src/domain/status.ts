@@ -34,7 +34,13 @@ export type MultaStatusPagamento = (typeof MULTA_STATUS_PAGAMENTO)[number];
 export const MULTA_STATUS_REVISAO = ['auto_vinculada', 'aguardando_revisao', 'revisada'] as const;
 export type MultaStatusRevisao = (typeof MULTA_STATUS_REVISAO)[number];
 
-export const ALERTA_TIPO = ['desvio_rota', 'parada_longa', 'velocidade_alta', 'sem_gps'] as const;
+export const ALERTA_TIPO = [
+  'desvio_rota',
+  'parada_longa',
+  'velocidade_alta',
+  'sem_gps',
+  'sem_sinal',
+] as const;
 export type AlertaTipo = (typeof ALERTA_TIPO)[number];
 
 export const EMPRESA_PLANO = ['trial', 'ativo', 'suspenso', 'cancelado'] as const;

@@ -14,6 +14,10 @@ interface RespAsaas {
   id: string;
 }
 
+// Teto de espera nas chamadas ao Asaas: sem ele, um Asaas fora do ar segura a
+// request (e a conexão) indefinidamente — o fetch do Node não tem timeout próprio.
+const ASAAS_TIMEOUT_MS = 15_000;
+
 async function chamar(method: 'POST' | 'PUT', path: string, body: unknown): Promise<RespAsaas> {
   const res = await fetch(`${env.asaas.baseUrl}${path}`, {
     method,
@@ -22,6 +26,7 @@ async function chamar(method: 'POST' | 'PUT', path: string, body: unknown): Prom
       access_token: env.asaas.apiKey as string,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(ASAAS_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detalhe = await res.text().catch(() => '');
@@ -78,7 +83,10 @@ export async function listarFaturasAssinatura(
 
   const res = await fetch(
     `${env.asaas.baseUrl}/payments?subscription=${encodeURIComponent(subscriptionId)}&limit=50`,
-    { headers: { access_token: env.asaas.apiKey as string } },
+    {
+      headers: { access_token: env.asaas.apiKey as string },
+      signal: AbortSignal.timeout(ASAAS_TIMEOUT_MS),
+    },
   );
   if (!res.ok) {
     const detalhe = await res.text().catch(() => '');

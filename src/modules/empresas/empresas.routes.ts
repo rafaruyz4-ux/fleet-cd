@@ -5,7 +5,9 @@ import { validate } from '../../middleware/validate';
 import {
   atualizarEmpresaSchema,
   criarEmpresaSchema,
+  idParamSchema,
   redefinirSenhaSchema,
+  usuarioParamSchema,
 } from './empresas.schemas';
 import * as empresasService from './empresas.service';
 
@@ -34,6 +36,7 @@ empresasAdminRouter.post(
 // Detalhe de uma empresa (dados + usuários dela).
 empresasAdminRouter.get(
   '/:id',
+  validate({ params: idParamSchema }),
   asyncHandler(async (req, res) => {
     res.json(await empresasService.obter(req.params.id!));
   }),
@@ -42,7 +45,7 @@ empresasAdminRouter.get(
 // Edita os dados de uma empresa.
 empresasAdminRouter.patch(
   '/:id',
-  validate({ body: atualizarEmpresaSchema }),
+  validate({ params: idParamSchema, body: atualizarEmpresaSchema }),
   asyncHandler(async (req, res) => {
     res.json(await empresasService.atualizar(req.params.id!, req.body));
   }),
@@ -51,7 +54,7 @@ empresasAdminRouter.patch(
 // Redefine a senha de um usuário da empresa (cliente esqueceu a senha).
 empresasAdminRouter.post(
   '/:id/usuarios/:usuarioId/senha',
-  validate({ body: redefinirSenhaSchema }),
+  validate({ params: usuarioParamSchema, body: redefinirSenhaSchema }),
   asyncHandler(async (req, res) => {
     await empresasService.redefinirSenha(req.params.id!, req.params.usuarioId!, req.body.senha);
     res.json({ ok: true });

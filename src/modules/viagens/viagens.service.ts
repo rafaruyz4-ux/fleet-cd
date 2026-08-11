@@ -5,6 +5,7 @@ import { MontadorUpdate, MontadorWhere } from '../../db/sql';
 import type {
   AddParadaInput,
   CreateViagemInput,
+  CriarViagemMotoristaInput,
   EncerrarViagemInput,
   ExportViagensQuery,
   IniciarViagemInput,
@@ -377,6 +378,23 @@ export async function update(
 // ---------------------------------------------------------------------
 // Ciclo de vida
 // ---------------------------------------------------------------------
+// Traduz a violação dos índices únicos parciais da migration 014 (no máximo
+// UMA viagem iniciada por motorista/veículo) num 400 amigável. É a rede de
+// segurança contra o toque duplo: o check-then-act de cima pode passar duas
+// vezes, mas o banco só deixa UMA viagem ser iniciada.
+function traduzirViagemDuplicada(err: unknown): never {
+  const e = err as { code?: string; constraint?: string };
+  if (e?.code === '23505') {
+    if (e.constraint === 'uq_viagens_motorista_iniciada') {
+      throw AppError.badRequest('Este motorista já tem uma viagem iniciada — encerre-a primeiro');
+    }
+    if (e.constraint === 'uq_viagens_veiculo_iniciada') {
+      throw AppError.badRequest('Este veículo já está rodando em outra viagem');
+    }
+  }
+  throw err;
+}
+
 export async function iniciar(
   empresaId: string,
   id: string,
@@ -409,13 +427,59 @@ export async function iniciar(
     );
 
     return getViagemComParadas(run, empresaId, id);
-  });
+  }).catch(traduzirViagemDuplicada);
 }
 
 /**
  * Início pelo APP do motorista: mesma regra do iniciar do gestor, mas só na
  * viagem do próprio motorista (o app manda o id, a posse é conferida aqui).
  */
+// Motorista cria a própria viagem e já sai dirigindo (app/web do motorista).
+// Trava extra do autosserviço: só conta viagem JÁ INICIADA — as planejadas
+// pelo gestor (em_andamento sem iniciada_em) não bloqueiam.
+export async function criarEIniciarPeloMotorista(
+  empresaId: string,
+  motoristaId: string,
+  input: CriarViagemMotoristaInput,
+): Promise<Viagem> {
+  const minhaAtiva = await queryOne<{ id: string }>(
+    `SELECT id FROM viagens
+      WHERE empresa_id = $1 AND motorista_id = $2
+        AND status = 'em_andamento' AND iniciada_em IS NOT NULL
+      LIMIT 1`,
+    [empresaId, motoristaId],
+  );
+  if (minhaAtiva) {
+    throw AppError.badRequest('Você já tem uma viagem iniciada — encerre-a antes de criar outra');
+  }
+  const veiculoRodando = await queryOne<{ id: string }>(
+    `SELECT id FROM viagens
+      WHERE empresa_id = $1 AND veiculo_id = $2
+        AND status = 'em_andamento' AND iniciada_em IS NOT NULL
+      LIMIT 1`,
+    [empresaId, input.veiculo_id],
+  );
+  if (veiculoRodando) {
+    throw AppError.badRequest('Este veículo já está rodando em outra viagem');
+  }
+  const criada = await create(empresaId, {
+    veiculo_id: input.veiculo_id,
+    motorista_id: motoristaId,
+    ...(input.km_inicial !== undefined ? { km_inicial: input.km_inicial } : {}),
+  });
+  try {
+    return await iniciar(empresaId, criada.id, {});
+  } catch (err) {
+    // Toque duplo: o iniciar esbarrou no índice único (outra viagem já foi
+    // iniciada entre o check e agora). Cancela a viagem que acabou de ser
+    // criada para não deixar uma "planejada" órfã na listagem do gestor.
+    if (err instanceof AppError && err.statusCode === 400) {
+      await cancelar(empresaId, criada.id).catch(() => {});
+    }
+    throw err;
+  }
+}
+
 export async function iniciarPeloMotorista(
   empresaId: string,
   id: string,
@@ -429,6 +493,22 @@ export async function iniciarPeloMotorista(
     throw AppError.notFound('Viagem não encontrada');
   }
   return iniciar(empresaId, id, {});
+}
+
+// Motorista encerra a própria viagem (fim do expediente, sem depender do gestor).
+export async function encerrarPeloMotorista(
+  empresaId: string,
+  id: string,
+  motoristaId: string,
+): Promise<Viagem> {
+  const dona = await queryOne<{ motorista_id: string }>(
+    'SELECT motorista_id FROM viagens WHERE id = $1 AND empresa_id = $2',
+    [id, empresaId],
+  );
+  if (!dona || dona.motorista_id !== motoristaId) {
+    throw AppError.notFound('Viagem não encontrada');
+  }
+  return encerrar(empresaId, id, {});
 }
 
 export async function encerrar(

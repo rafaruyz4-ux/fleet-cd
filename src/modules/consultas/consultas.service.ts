@@ -108,58 +108,71 @@ export async function consultarVeiculo(
   empresaId: string,
   veiculoId: string,
 ): Promise<ResultadoConsultaVeiculo> {
-  // Trava por empresa (lock consultivo de transação): serializa o par
-  // "checar limite" + "registrar consulta". Sem ela, N requests paralelas
-  // passam todas no COUNT antes de qualquer INSERT e estouram o teto do plano
-  // (cada consulta real custa dinheiro na conta da Nexus). O lock é liberado
-  // sozinho no COMMIT/ROLLBACK.
-  return withTransaction(async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1::text))', [empresaId]);
-    await assertPodeConsultar(empresaId);
+  // A chamada à Infosimples leva até 60s. Ela roda FORA de qualquer transação:
+  // segurar uma conexão do pool (de 10) aberta em transação por 60s era o
+  // caminho mais curto para esgotar o pool com meia dúzia de consultas em
+  // paralelo. O fluxo agora é: checa limite → consulta o órgão → UMA transação
+  // curta grava tudo (multas + registro da consulta).
+  //
+  // Trade-off assumido: sem a transação envolvendo a chamada cara, duas
+  // requests simultâneas podem passar juntas no pré-check e estourar o teto do
+  // plano em 1 consulta. O advisory lock na gravação mantém o contador
+  // consistente; o pré-check barra o caso comum (limite já atingido).
+  await assertPodeConsultar(empresaId);
 
-    const veiculo = await queryOne<{ placa: string; renavam: string | null }>(
-      'SELECT placa, renavam FROM veiculos WHERE id = $1 AND empresa_id = $2',
-      [veiculoId, empresaId],
+  const veiculo = await queryOne<{ placa: string; renavam: string | null }>(
+    'SELECT placa, renavam FROM veiculos WHERE id = $1 AND empresa_id = $2',
+    [veiculoId, empresaId],
+  );
+  if (!veiculo) throw AppError.notFound('Veículo não encontrado');
+
+  let resultado;
+  try {
+    resultado = await consultarDebitosVeiculo({ placa: veiculo.placa, renavam: veiculo.renavam });
+  } catch (err) {
+    // Registra a consulta com erro como trilha/diagnóstico. Erro não consome
+    // cota — o contador de consumo exclui status 'erro' (só conta o que custou).
+    await query(
+      `INSERT INTO consultas_infosimples
+         (empresa_id, veiculo_id, placa, tipo, status, simulado, custo_centavos, mensagem)
+       VALUES ($1, $2, $3, 'debitos', 'erro', $4, 0, $5)`,
+      [
+        empresaId,
+        veiculoId,
+        veiculo.placa,
+        !infosimplesConfigurado(),
+        err instanceof Error ? err.message : 'erro desconhecido',
+      ],
     );
-    if (!veiculo) throw AppError.notFound('Veículo não encontrado');
+    throw err;
+  }
 
-    let resultado;
-    try {
-      resultado = await consultarDebitosVeiculo({ placa: veiculo.placa, renavam: veiculo.renavam });
-    } catch (err) {
-      // Registra a consulta com erro FORA da transação (pool): o ROLLBACK que o
-      // rethrow provoca não pode apagar a trilha. Erro não consome cota — o
-      // contador de consumo exclui status 'erro' (só conta o que custou).
-      await query(
-        `INSERT INTO consultas_infosimples
-           (empresa_id, veiculo_id, placa, tipo, status, simulado, custo_centavos, mensagem)
-         VALUES ($1, $2, $3, 'debitos', 'erro', $4, 0, $5)`,
-        [
-          empresaId,
-          veiculoId,
-          veiculo.placa,
-          !infosimplesConfigurado(),
-          err instanceof Error ? err.message : 'erro desconhecido',
-        ],
-      );
-      throw err;
-    }
+  // Transação CURTA de gravação: multas + registro da consulta, atômicos.
+  // O advisory lock (liberado sozinho no COMMIT/ROLLBACK) serializa a gravação
+  // por empresa, mantendo o contador de consumo consistente entre paralelas.
+  const gravado = await withTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1::text))', [empresaId]);
 
-    // Cria as multas novas; conflito (numero_auto repetido) = já existia → pula.
+    // Cria as multas novas NO MESMO client da transação (padrão Runner):
+    // conflito (numero_auto repetido) = já existia → pula, sem abortar o resto.
     let novas = 0;
     let duplicadas = 0;
     for (const m of resultado.multas) {
       try {
-        await multasService.create(empresaId, {
-          numero_auto: m.numero_auto,
-          placa: veiculo.placa,
-          ocorrida_em: m.ocorrida_em ? new Date(m.ocorrida_em) : undefined,
-          tipo: m.tipo,
-          valor: m.valor,
-          pontos_cnh: m.pontos_cnh,
-          local: m.local,
-          fonte: 'infosimples',
-        });
+        await multasService.create(
+          empresaId,
+          {
+            numero_auto: m.numero_auto,
+            placa: veiculo.placa,
+            ocorrida_em: m.ocorrida_em ? new Date(m.ocorrida_em) : undefined,
+            tipo: m.tipo,
+            valor: m.valor,
+            pontos_cnh: m.pontos_cnh,
+            local: m.local,
+            fonte: 'infosimples',
+          },
+          client,
+        );
         novas++;
       } catch (err) {
         if (isConflito(err)) {
@@ -196,8 +209,6 @@ export async function consultarVeiculo(
 
     return {
       consultaId: ins.rows[0]!.id,
-      veiculo,
-      resultado,
       resposta: {
         simulado: resultado.simulado,
         mensagem: resultado.mensagem,
@@ -208,12 +219,12 @@ export async function consultarVeiculo(
         consumo: await consumoDoMes(empresaId, client),
       } satisfies ResultadoConsultaVeiculo,
     };
-  }).then(async ({ consultaId, veiculo, resultado, resposta }) => {
-    // Depois do commit (as multas já existem no banco): gera o comprovante em
-    // PDF e liga as multas à consulta. Best-effort — falha não desfaz a consulta.
-    await salvarComprovanteDaConsulta(empresaId, consultaId, veiculo, resultado);
-    return resposta;
   });
+
+  // Depois do commit (as multas já existem no banco): gera o comprovante em
+  // PDF e liga as multas à consulta. Best-effort — falha não desfaz a consulta.
+  await salvarComprovanteDaConsulta(empresaId, gravado.consultaId, veiculo, resultado);
+  return gravado.resposta;
 }
 
 /**

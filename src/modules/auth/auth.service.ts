@@ -1,10 +1,6 @@
 import { AppError } from '../../errors/AppError';
 import { queryOne } from '../../db/pool';
-import {
-  empresaBloqueada,
-  erroAssinaturaSuspensa,
-  statusDaEmpresa,
-} from '../../middleware/acesso';
+import { empresaBloqueada, erroAssinaturaSuspensa, statusDaEmpresa } from '../../middleware/acesso';
 import { verifyPassword } from '../../utils/password';
 import {
   signAccessToken,
@@ -108,6 +104,7 @@ interface MotoristaAuthRow {
   senha_hash: string | null;
   empresa_id: string;
   ativo: boolean;
+  token_version: number;
 }
 
 export interface MotoristaPublico {
@@ -128,8 +125,17 @@ function motoristaPayload(row: {
   id: string;
   cpf: string;
   empresa_id: string;
+  token_version: number;
 }): MotoristaTokenPayload {
-  return { sub: row.id, tipo: 'motorista', empresaId: row.empresa_id, cpf: row.cpf };
+  return {
+    sub: row.id,
+    tipo: 'motorista',
+    empresaId: row.empresa_id,
+    cpf: row.cpf,
+    // Carimba a versão atual: se o gestor revogar (token_version + 1), este
+    // token — e qualquer outro emitido antes — deixa de ser aceito.
+    tokenVersion: row.token_version,
+  };
 }
 
 // Normaliza CPF para só dígitos (a coluna pode estar com ou sem pontuação).
@@ -138,7 +144,8 @@ const CPF_DIGITS = `regexp_replace(cpf, '\\D', '', 'g')`;
 export async function loginMotorista(cpf: string, senha: string): Promise<MotoristaAuthResult> {
   const cpfDigits = cpf.replace(/\D/g, '');
   const motorista = await queryOne<MotoristaAuthRow>(
-    `SELECT id, nome, cpf, senha_hash, empresa_id, ativo FROM motoristas WHERE ${CPF_DIGITS} = $1`,
+    `SELECT id, nome, cpf, senha_hash, empresa_id, ativo, token_version
+       FROM motoristas WHERE ${CPF_DIGITS} = $1`,
     [cpfDigits],
   );
 
@@ -195,9 +202,11 @@ export async function refresh(refreshToken: string): Promise<{ accessToken: stri
       senha_hash: string | null;
       empresa_id: string;
       ativo: boolean;
-    }>('SELECT id, cpf, senha_hash, empresa_id, ativo FROM motoristas WHERE id = $1', [
-      payload.sub,
-    ]);
+      token_version: number;
+    }>(
+      'SELECT id, cpf, senha_hash, empresa_id, ativo, token_version FROM motoristas WHERE id = $1',
+      [payload.sub],
+    );
     if (!row || !row.ativo || !row.senha_hash) {
       throw AppError.unauthorized('Motorista não encontrado ou sem acesso');
     }

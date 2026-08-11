@@ -169,52 +169,121 @@ export async function ingestPosicoes(
       (a, b) => a.registrado_em.getTime() - b.registrado_em.getTime(),
     );
 
-    let stopAnchor: Ponto | null = prev;
-    let stopEmitido = false;
-    const ultimoAlerta: Record<AlertaTipo, number> = {
-      desvio_rota: -Infinity,
-      parada_longa: -Infinity,
-      velocidade_alta: -Infinity,
-      sem_gps: -Infinity,
-    };
-
-    const alertas: AlertaGerado[] = [];
-    let inseridas = 0;
+    // --- Passo 1: filtro de qualidade (em memória — é sequencial por natureza:
+    // o "teletransporte" compara cada ponto com o ANTERIOR ACEITO). Ponto ruim
+    // não persiste, não vira alerta e não vira prev.
+    const aceitos: PosicaoInput[] = [];
+    const vistos = new Set<number>(); // dedup dentro do próprio lote
     let descartadas = 0;
-
+    let prevFiltro = prev;
     for (const p of posicoes) {
       const time = p.registrado_em.getTime();
-      const ponto: Ponto = { lat: p.lat, lng: p.lng, time };
-
-      // --- Filtro de qualidade (não persiste, não vira alerta, não vira prev) ---
+      // Mesmo instante repetido no próprio lote: fica só o primeiro (o índice
+      // único (viagem_id, registrado_em) não aceitaria o segundo de todo jeito).
+      if (vistos.has(time)) continue;
       // Precisão ruim: o círculo de incerteza é grande demais para valer algo.
       if (p.precisao_m != null && p.precisao_m > PRECISAO_MAX_M) {
         descartadas++;
         continue;
       }
       // "Teletransporte": velocidade implícita impossível vs o ponto anterior.
-      if (prev && time > prev.time) {
-        const velImplicitaKmh = (haversineM(ponto, prev) / ((time - prev.time) / 1000)) * 3.6;
+      if (prevFiltro && time > prevFiltro.time) {
+        const ponto: Ponto = { lat: p.lat, lng: p.lng, time };
+        const velImplicitaKmh =
+          (haversineM(ponto, prevFiltro) / ((time - prevFiltro.time) / 1000)) * 3.6;
         if (velImplicitaKmh > TELETRANSPORTE_KMH) {
           descartadas++;
           continue;
         }
       }
+      aceitos.push(p);
+      vistos.add(time);
+      prevFiltro = { lat: p.lat, lng: p.lng, time };
+    }
 
-      await client.query(
-        `INSERT INTO posicoes_gps (empresa_id, viagem_id, coordenada, velocidade_kmh, precisao_m, registrado_em)
-         VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography, $5, $6, $7)`,
-        [
-          empresaId,
-          viagemId,
-          p.lng,
-          p.lat,
-          p.velocidade_kmh ?? null,
-          p.precisao_m ?? null,
-          p.registrado_em,
-        ],
+    if (aceitos.length === 0) {
+      return { inseridas: 0, descartadas, alertas: [] };
+    }
+
+    // --- Passo 2: UM INSERT para o lote inteiro (unnest), em vez de 1 INSERT
+    // por ponto (um lote de 1.000 pontos fazia 1.000 round-trips ao banco).
+    // ON CONFLICT DO NOTHING = idempotência: o contrato do app é "sem resposta
+    // OK, reenvia o lote" — o reenvio não pode duplicar pontos (índice único
+    // (viagem_id, registrado_em) da migration 013). O RETURNING diz quais
+    // pontos REALMENTE entraram agora: só eles geram alertas (reenvio não
+    // re-dispara alerta de ponto já processado).
+    const lngs = aceitos.map((p) => p.lng);
+    const lats = aceitos.map((p) => p.lat);
+    const vels = aceitos.map((p) => p.velocidade_kmh ?? null);
+    const precs = aceitos.map((p) => p.precisao_m ?? null);
+    const regs = aceitos.map((p) => p.registrado_em.toISOString());
+
+    const inseridos = await client.query<{ registrado_em: string }>(
+      `INSERT INTO posicoes_gps
+         (empresa_id, viagem_id, coordenada, velocidade_kmh, precisao_m, registrado_em)
+       SELECT $1, $2, ST_SetSRID(ST_MakePoint(t.lng, t.lat), 4326)::geography,
+              t.vel, t.prec, t.reg
+       FROM unnest($3::float8[], $4::float8[], $5::numeric[], $6::numeric[], $7::timestamptz[])
+         AS t(lng, lat, vel, prec, reg)
+       ON CONFLICT (viagem_id, registrado_em) DO NOTHING
+       RETURNING registrado_em`,
+      [empresaId, viagemId, lngs, lats, vels, precs, regs],
+    );
+    const inseridas = inseridos.rowCount ?? 0;
+    const entraram = new Set(inseridos.rows.map((r) => new Date(r.registrado_em).getTime()));
+
+    // --- Passo 3: distância de TODOS os pontos à rota numa query só (antes
+    // era 1 query ST_Distance por ponto). Alinhado por ordinality com `aceitos`.
+    const distancias = new Map<number, number>(); // índice em `aceitos` → metros
+    if (temLinha && viagem.rota_planejada_id) {
+      const dist = await client.query<{ ord: number; dist: number }>(
+        `SELECT t.ord::int AS ord,
+                ST_Distance(r.linha, ST_SetSRID(ST_MakePoint(t.lng, t.lat), 4326)::geography) AS dist
+         FROM rotas_planejadas r,
+              unnest($2::float8[], $3::float8[]) WITH ORDINALITY AS t(lng, lat, ord)
+         WHERE r.id = $1`,
+        [viagem.rota_planejada_id, lngs, lats],
       );
-      inseridas++;
+      for (const row of dist.rows) distancias.set(row.ord - 1, Number(row.dist));
+    }
+
+    // --- Passo 4: detecção de alertas (em memória, com as distâncias prontas).
+    // Cooldown SEMEADO do banco: sem isso, cada request começava do zero
+    // (-Infinity) e o mesmo tipo de alerta era re-emitido a cada lote —
+    // 10 alertas/h em vez de 1 a cada 5 min.
+    const ultimoAlerta: Record<AlertaTipo, number> = {
+      desvio_rota: -Infinity,
+      parada_longa: -Infinity,
+      velocidade_alta: -Infinity,
+      sem_gps: -Infinity,
+    };
+    const semeados = await client.query<{ tipo: AlertaTipo; ultimo: string }>(
+      `SELECT tipo, MAX(criado_em) AS ultimo FROM alertas WHERE viagem_id = $1 GROUP BY tipo`,
+      [viagemId],
+    );
+    for (const s of semeados.rows) {
+      if (s.tipo in ultimoAlerta) ultimoAlerta[s.tipo] = new Date(s.ultimo).getTime();
+    }
+
+    let stopAnchor: Ponto | null = prev;
+    let stopEmitido = false;
+    const alertas: AlertaGerado[] = [];
+
+    for (let i = 0; i < aceitos.length; i++) {
+      const p = aceitos[i]!;
+      const time = p.registrado_em.getTime();
+      const ponto: Ponto = { lat: p.lat, lng: p.lng, time };
+
+      // Ponto que já existia no banco (reenvio): não re-analisa, mas continua
+      // alimentando o encadeamento (prev/âncora de parada) para os novos.
+      if (!entraram.has(time)) {
+        prev = ponto;
+        if (stopAnchor == null || haversineM(ponto, stopAnchor) > PARADA_RAIO_M) {
+          stopAnchor = ponto;
+          stopEmitido = false;
+        }
+        continue;
+      }
 
       const candidatos: Array<{ tipo: AlertaTipo; descricao: string }> = [];
 
@@ -235,20 +304,13 @@ export async function ingestPosicoes(
         });
       }
 
-      // desvio_rota
-      if (temLinha && viagem.rota_planejada_id) {
-        const dist = await client.query<{ dist: number }>(
-          `SELECT ST_Distance(linha, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS dist
-           FROM rotas_planejadas WHERE id = $3`,
-          [p.lng, p.lat, viagem.rota_planejada_id],
-        );
-        const d = dist.rows[0]?.dist ?? 0;
-        if (d > raioTolerancia) {
-          candidatos.push({
-            tipo: 'desvio_rota',
-            descricao: `Fora da rota em ~${Math.round(d)} m (tolerância ${raioTolerancia} m)`,
-          });
-        }
+      // desvio_rota (distância pré-calculada no passo 3)
+      const d = distancias.get(i);
+      if (d !== undefined && d > raioTolerancia) {
+        candidatos.push({
+          tipo: 'desvio_rota',
+          descricao: `Fora da rota em ~${Math.round(d)} m (tolerância ${raioTolerancia} m)`,
+        });
       }
 
       // parada_longa (ancorado no último ponto onde "parou")
@@ -430,7 +492,10 @@ export interface TrajetoRuas {
 
 // Cache simples em memória do trajeto encaixado: evita bater no serviço
 // externo a cada poll do dashboard. A chave muda quando chegam pontos novos.
-const trajetoRuasCache = new Map<string, { chave: string; expira: number; resultado: TrajetoRuas }>();
+const trajetoRuasCache = new Map<
+  string,
+  { chave: string; expira: number; resultado: TrajetoRuas }
+>();
 const TRAJETO_RUAS_CACHE_MS = 10 * 60 * 1000; // TTL (a chave já invalida por ponto novo)
 const TRAJETO_RUAS_CACHE_MAX = 200; // teto de viagens em cache
 
@@ -447,7 +512,9 @@ export async function getTrajetoRuas(empresaId: string, viagemId: string): Promi
   // Plano A: encaixar nas ruas (Valhalla; se falhar, OSRM). Plano B: linha bruta.
   const ruas =
     (await matchTrajeto(bruto)) ??
-    (await matchTrajetoOsrm(pontos.map((p) => ({ lat: p.lat, lng: p.lng, precisao_m: p.precisao_m }))));
+    (await matchTrajetoOsrm(
+      pontos.map((p) => ({ lat: p.lat, lng: p.lng, precisao_m: p.precisao_m })),
+    ));
 
   const resultado: TrajetoRuas =
     ruas && ruas.length >= 2

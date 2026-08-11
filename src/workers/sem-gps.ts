@@ -12,12 +12,15 @@ export interface SemGpsAlerta {
 }
 
 /**
- * Varre as viagens em andamento e gera o alerta `sem_gps` para as que estão
- * sem contato (sem posição recebida nem início) há mais que o limite. O limite
- * é o configurado POR EMPRESA (empresas.alerta_sem_gps_min, tela Configurações);
- * `limiteMin` (env) fica como plano B se a coluna vier nula. Faz dedup:
- * não re-alerta enquanto não chegar uma nova posição (o alerta anterior já
- * cobre o silêncio atual). Devolve os alertas criados nesta passada.
+ * Varre as viagens em andamento e gera o alerta `sem_gps` para as que foram
+ * iniciadas mas NUNCA transmitiram posição (o caso "app nem chegou a mandar
+ * nada"). O limite é o configurado POR EMPRESA (empresas.alerta_sem_gps_min,
+ * tela Configurações); `limiteMin` (env) fica como plano B se a coluna vier
+ * nula. Faz dedup: não re-alerta enquanto não chegar uma nova posição (o
+ * alerta anterior já cobre o silêncio atual). Devolve os alertas criados.
+ *
+ * O caso "transmitia e SILENCIOU" virou um tipo próprio ('sem_sinal', abaixo)
+ * para o gestor distinguir "nunca conectou" de "veículo ficou mudo na rua".
  */
 export async function detectarSemGps(
   limiteMin = env.workerSemGps.limiteMin,
@@ -25,12 +28,50 @@ export async function detectarSemGps(
   return query<SemGpsAlerta>(
     `
     WITH candidatas AS (
-      SELECT v.id AS viagem_id, v.empresa_id,
-             GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em)) AS ref,
-             p.lat, p.lng
+      SELECT v.id AS viagem_id, v.empresa_id, v.iniciada_em AS ref
       FROM viagens v
       JOIN empresas e ON e.id = v.empresa_id
-      LEFT JOIN LATERAL (
+      WHERE v.status = 'em_andamento'
+        AND v.iniciada_em IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM posicoes_gps p WHERE p.viagem_id = v.id)
+        AND now() - v.iniciada_em
+              > make_interval(mins => COALESCE(e.alerta_sem_gps_min, $1))
+        AND NOT EXISTS (
+          SELECT 1 FROM alertas a
+          WHERE a.viagem_id = v.id
+            AND a.tipo = 'sem_gps'
+            AND a.criado_em >= v.iniciada_em
+        )
+    )
+    INSERT INTO alertas (empresa_id, viagem_id, tipo, descricao, coordenada)
+    SELECT empresa_id, viagem_id, 'sem_gps',
+           'Sem posição há ' || round(extract(epoch FROM (now() - ref)) / 60)::int || ' min',
+           NULL
+    FROM candidatas
+    RETURNING id, viagem_id, descricao, criado_em
+    `,
+    [limiteMin],
+  );
+}
+
+/**
+ * "Veículo mudo": viagem em andamento que JÁ TRANSMITIA posição e parou de
+ * enviar há mais que o limite (app fechado, celular sem bateria, sem sinal).
+ * Limite padrão de 10 min, configurável por env (WORKER_SEM_SINAL_LIMITE_MIN).
+ * Dedup: 1 alerta por silêncio — só re-alerta se chegar posição nova e o
+ * veículo silenciar DE NOVO (alerta existente com criado_em >= última posição
+ * cobre o silêncio atual). A coordenada do alerta é a última posição conhecida,
+ * que é exatamente onde o gestor deve procurar o veículo.
+ */
+export async function detectarSemSinal(
+  limiteMin = env.workerSemGps.semSinalLimiteMin,
+): Promise<SemGpsAlerta[]> {
+  return query<SemGpsAlerta>(
+    `
+    WITH candidatas AS (
+      SELECT v.id AS viagem_id, v.empresa_id, p.ultimo, p.lat, p.lng
+      FROM viagens v
+      JOIN LATERAL (
         SELECT recebido_em AS ultimo,
                ST_Y(coordenada::geometry) AS lat,
                ST_X(coordenada::geometry) AS lng
@@ -41,21 +82,19 @@ export async function detectarSemGps(
       ) p ON TRUE
       WHERE v.status = 'em_andamento'
         AND v.iniciada_em IS NOT NULL
-        AND now() - GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em))
-              > make_interval(mins => COALESCE(e.alerta_sem_gps_min, $1))
+        AND now() - p.ultimo > make_interval(mins => $1)
         AND NOT EXISTS (
           SELECT 1 FROM alertas a
           WHERE a.viagem_id = v.id
-            AND a.tipo = 'sem_gps'
-            AND a.criado_em >= GREATEST(v.iniciada_em, COALESCE(p.ultimo, v.iniciada_em))
+            AND a.tipo = 'sem_sinal'
+            AND a.criado_em >= p.ultimo
         )
     )
     INSERT INTO alertas (empresa_id, viagem_id, tipo, descricao, coordenada)
-    SELECT empresa_id, viagem_id, 'sem_gps',
-           'Sem posição há ' || round(extract(epoch FROM (now() - ref)) / 60)::int || ' min',
-           CASE WHEN lat IS NOT NULL
-                THEN ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
-                ELSE NULL END
+    SELECT empresa_id, viagem_id, 'sem_sinal',
+           'Veículo mudo: transmitia e está sem enviar posição há '
+             || round(extract(epoch FROM (now() - ultimo)) / 60)::int || ' min',
+           ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
     FROM candidatas
     RETURNING id, viagem_id, descricao, criado_em
     `,
@@ -71,11 +110,15 @@ export async function detectarSemGps(
 export function agendarWorkerSemGps(): () => void {
   const tick = async () => {
     try {
-      const novos = await withRedisLock(LOCK_KEY, env.workerSemGps.intervaloMs, () =>
-        detectarSemGps(),
-      );
+      const novos = await withRedisLock(LOCK_KEY, env.workerSemGps.intervaloMs, async () => {
+        // As duas varreduras na mesma passada: "nunca transmitiu" (sem_gps)
+        // e "transmitia e silenciou" (sem_sinal).
+        const semGps = await detectarSemGps();
+        const semSinal = await detectarSemSinal();
+        return [...semGps, ...semSinal];
+      });
       if (novos && novos.length > 0) {
-        console.log(`[worker:sem-gps] ${novos.length} alerta(s) de sem_gps gerado(s)`);
+        console.log(`[worker:sem-gps] ${novos.length} alerta(s) de silêncio gerado(s)`);
       }
     } catch (err) {
       console.error('[worker:sem-gps] erro na varredura', err);

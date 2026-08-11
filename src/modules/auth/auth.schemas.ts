@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { schemaSenha } from '../../utils/senha';
 
 export const loginSchema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -22,7 +23,8 @@ export const esqueciSenhaSchema = z.object({
 
 export const redefinirSenhaSchema = z.object({
   token: z.string().min(1, 'Token obrigatório'),
-  senha: z.string().min(8, 'A senha deve ter ao menos 8 caracteres'),
+  // Política de senha central (utils/senha): 10+, ou 8+ com letra e número.
+  senha: schemaSenha(200),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

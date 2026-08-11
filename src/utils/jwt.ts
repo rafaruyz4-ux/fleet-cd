@@ -20,6 +20,11 @@ export interface MotoristaTokenPayload {
   tipo: 'motorista';
   empresaId: string; // tenant: empresa à qual o motorista pertence
   cpf: string;
+  // Versão dos tokens do motorista no momento da emissão. A verificação
+  // compara com motoristas.token_version: incrementar a coluna (celular
+  // perdido/roubado) revoga TODOS os tokens já emitidos. Tokens antigos,
+  // de antes deste campo existir, contam como versão 0.
+  tokenVersion?: number;
 }
 
 export type AccessTokenPayload = UsuarioTokenPayload | MotoristaTokenPayload;

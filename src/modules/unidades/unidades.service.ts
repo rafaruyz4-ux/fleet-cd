@@ -130,11 +130,23 @@ export async function update(
 }
 
 export async function remove(empresaId: string, id: string): Promise<void> {
-  const row = await queryOne<{ id: string }>(
-    'UPDATE unidades_proprias SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
-    [id, empresaId],
-  );
-  if (!row) {
-    throw AppError.notFound('Unidade não encontrada');
+  // Hard delete quando não há histórico; com registros vinculados (FK 23503)
+  // a unidade é preservada e apenas inativada.
+  try {
+    const row = await queryOne<{ id: string }>(
+      'DELETE FROM unidades_proprias WHERE id = $1 AND empresa_id = $2 RETURNING id',
+      [id, empresaId],
+    );
+    if (!row) {
+      throw AppError.notFound('Unidade não encontrada');
+    }
+  } catch (err) {
+    if ((err as { code?: string }).code !== '23503') {
+      throw err;
+    }
+    await queryOne(
+      'UPDATE unidades_proprias SET ativo = FALSE WHERE id = $1 AND empresa_id = $2 RETURNING id',
+      [id, empresaId],
+    );
   }
 }

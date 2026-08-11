@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EMPRESA_PLANO } from '../../domain/status';
+import { schemaSenha } from '../../utils/senha';
 
 const cnpjRegex = /^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/;
 
@@ -12,7 +13,8 @@ export const criarEmpresaSchema = z.object({
   plano: z.enum(['trial', 'ativo']).optional(),
   adminNome: z.string().trim().min(2, 'Nome do responsável obrigatório').max(150),
   adminEmail: z.string().trim().email('E-mail inválido'),
-  adminSenha: z.string().min(8, 'A senha precisa ter ao menos 8 caracteres').max(200),
+  // Política de senha central (utils/senha): 10+, ou 8+ com letra e número.
+  adminSenha: schemaSenha(200),
 });
 
 export type CriarEmpresaInput = z.infer<typeof criarEmpresaSchema>;
@@ -32,7 +34,15 @@ export type AtualizarEmpresaInput = z.infer<typeof atualizarEmpresaSchema>;
 
 // Redefinição de senha de um usuário da empresa (cliente esqueceu a senha).
 export const redefinirSenhaSchema = z.object({
-  senha: z.string().min(8, 'A senha precisa ter ao menos 8 caracteres').max(200),
+  senha: schemaSenha(200),
+});
+
+// Parâmetros de rota do backoffice — valida :id (e :usuarioId) como UUID,
+// no mesmo padrão dos demais módulos.
+export const idParamSchema = z.object({ id: z.string().uuid('ID inválido') });
+export const usuarioParamSchema = z.object({
+  id: z.string().uuid('ID inválido'),
+  usuarioId: z.string().uuid('ID de usuário inválido'),
 });
 
 export type RedefinirSenhaInput = z.infer<typeof redefinirSenhaSchema>;

@@ -269,58 +269,94 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-export async function create(empresaId: string, input: CreateMultaInput): Promise<Multa> {
-  try {
-    const id = await withTransaction(async (client) => {
-      const veiculoId = await resolverVeiculoId(client, empresaId, input.veiculo_id, input.placa);
+/**
+ * Cria uma multa. Sem `clientExterno`, roda na própria transação (uso normal
+ * da API). COM `clientExterno`, roda DENTRO da transação de quem chamou (ex.:
+ * consultas.service registrando as multas de uma consulta Infosimples) — sem
+ * abrir uma 2ª conexão do pool. Nesse modo, cada tentativa é protegida por
+ * SAVEPOINT: uma violação de unicidade (multa repetida) é desfeita pontualmente
+ * sem abortar a transação externa, que segue processando as demais multas.
+ */
+export async function create(
+  empresaId: string,
+  input: CreateMultaInput,
+  clientExterno?: PoolClient,
+): Promise<Multa> {
+  const executar = async (client: PoolClient): Promise<string> => {
+    const veiculoId = await resolverVeiculoId(client, empresaId, input.veiculo_id, input.placa);
 
-      // Vínculo automático: só roda com veículo + instante da infração.
-      let viagemId: string | null = null;
-      let motoristaId: string | null = input.motorista_id ?? null;
-      let statusRevisao: 'auto_vinculada' | 'aguardando_revisao' = 'aguardando_revisao';
+    // Vínculo automático: só roda com veículo + instante da infração.
+    let viagemId: string | null = null;
+    let motoristaId: string | null = input.motorista_id ?? null;
+    let statusRevisao: 'auto_vinculada' | 'aguardando_revisao' = 'aguardando_revisao';
 
-      if (veiculoId && input.ocorrida_em) {
-        const viagem = await acharViagemNoPeriodo(client, empresaId, veiculoId, input.ocorrida_em);
-        if (viagem) {
-          viagemId = viagem.id;
-          motoristaId = input.motorista_id ?? viagem.motorista_id;
-          statusRevisao = 'auto_vinculada';
-        }
+    if (veiculoId && input.ocorrida_em) {
+      const viagem = await acharViagemNoPeriodo(client, empresaId, veiculoId, input.ocorrida_em);
+      if (viagem) {
+        viagemId = viagem.id;
+        motoristaId = input.motorista_id ?? viagem.motorista_id;
+        statusRevisao = 'auto_vinculada';
       }
+    }
 
-      const values: unknown[] = [
-        empresaId,
-        input.numero_auto,
-        veiculoId,
-        motoristaId,
-        viagemId,
-        input.ocorrida_em ?? null,
-        input.tipo ?? null,
-        input.valor ?? null,
-        input.pontos_cnh ?? null,
-        input.local ?? null,
-        input.fonte,
-        input.status_pagamento ?? null,
-        statusRevisao,
-      ];
+    const values: unknown[] = [
+      empresaId,
+      input.numero_auto,
+      veiculoId,
+      motoristaId,
+      viagemId,
+      input.ocorrida_em ?? null,
+      input.tipo ?? null,
+      input.valor ?? null,
+      input.pontos_cnh ?? null,
+      input.local ?? null,
+      input.fonte,
+      input.status_pagamento ?? null,
+      statusRevisao,
+    ];
 
-      let coordExpr = 'NULL';
-      if (input.coordenada) {
-        values.push(input.coordenada.lng, input.coordenada.lat);
-        coordExpr = `ST_SetSRID(ST_MakePoint($${values.length - 1}, $${values.length}), 4326)::geography`;
-      }
+    let coordExpr = 'NULL';
+    if (input.coordenada) {
+      values.push(input.coordenada.lng, input.coordenada.lat);
+      coordExpr = `ST_SetSRID(ST_MakePoint($${values.length - 1}, $${values.length}), 4326)::geography`;
+    }
 
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO multas
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO multas
            (empresa_id, numero_auto, veiculo_id, motorista_id, viagem_id, ocorrida_em, tipo,
             valor, pontos_cnh, local, fonte, status_pagamento, status_revisao, coordenada)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
                  COALESCE($12, 'pendente'), $13, ${coordExpr})
          RETURNING id`,
-        values,
+      values,
+    );
+    return inserted.rows[0]!.id;
+  };
+
+  try {
+    if (clientExterno) {
+      // SAVEPOINT: em Postgres, um erro dentro de uma transação aborta ELA
+      // INTEIRA; o rollback parcial até o savepoint preserva o que a transação
+      // externa já fez e deixa o chamador tratar o conflito (multa duplicada).
+      await clientExterno.query('SAVEPOINT multa_create');
+      let id: string;
+      try {
+        id = await executar(clientExterno);
+        await clientExterno.query('RELEASE SAVEPOINT multa_create');
+      } catch (err) {
+        await clientExterno.query('ROLLBACK TO SAVEPOINT multa_create');
+        throw err;
+      }
+      // Leitura pelo MESMO client: a linha ainda não foi commitada e o pool
+      // não a enxergaria (lição do Runner de viagens.service).
+      const row = await clientExterno.query<MultaRow>(
+        `SELECT ${SELECT_COLS} ${FROM} WHERE m.id = $1 AND m.empresa_id = $2`,
+        [id, empresaId],
       );
-      return inserted.rows[0]!.id;
-    });
+      return toMulta(row.rows[0]!);
+    }
+
+    const id = await withTransaction(executar);
     return getById(empresaId, id);
   } catch (err) {
     if (isUniqueViolation(err)) {

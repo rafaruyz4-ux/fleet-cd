@@ -54,11 +54,18 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
     await client.query('BEGIN');
     const result = await fn(client);
     await client.query('COMMIT');
+    client.release();
     return result;
   } catch (err) {
-    await client.query('ROLLBACK');
+    // O ROLLBACK também pode falhar (ex.: conexão caiu no meio da transação).
+    // Nesse caso ele NÃO pode mascarar o erro original, e a conexão — em
+    // estado imprevisível — não pode voltar ao pool: release(err) a descarta.
+    try {
+      await client.query('ROLLBACK');
+      client.release();
+    } catch {
+      client.release(err instanceof Error ? err : new Error(String(err)));
+    }
     throw err;
-  } finally {
-    client.release();
   }
 }
