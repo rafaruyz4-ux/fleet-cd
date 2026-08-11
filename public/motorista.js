@@ -289,10 +289,81 @@
           }
         }
         renderViagens(viagens);
+        loadVeiculos();
         show('viagens');
       })
       .catch(function (e) {
         logLine(e.message, 'err');
+      });
+  }
+
+  // --- Nova viagem: o motorista escolhe o veículo, cria e já sai dirigindo ---
+  function loadVeiculos() {
+    apiFetch('/api/app/veiculos')
+      .then(function (res) {
+        if (!res.ok) throw new Error('não deu pra listar os veículos');
+        return res.json();
+      })
+      .then(function (veiculos) {
+        var sel = $('nv-veiculo');
+        sel.innerHTML = '';
+        veiculos.forEach(function (v) {
+          var opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.placa + (v.modelo ? ' · ' + v.modelo : '');
+          sel.appendChild(opt);
+        });
+        $('btn-nova-viagem').disabled = veiculos.length === 0;
+      })
+      .catch(function (e) {
+        logLine(e.message, 'err');
+      });
+  }
+
+  function criarViagem() {
+    var erro = $('nv-erro');
+    erro.hidden = true;
+    var veiculoId = $('nv-veiculo').value;
+    if (!veiculoId) {
+      erro.textContent = 'Escolha um veículo.';
+      erro.hidden = false;
+      return;
+    }
+    var btn = $('btn-nova-viagem');
+    btn.disabled = true;
+    btn.textContent = 'Criando...';
+    apiFetch('/api/app/viagens', {
+      method: 'POST',
+      body: JSON.stringify({ veiculo_id: veiculoId }),
+    })
+      .then(function (res) {
+        if (!res.ok)
+          return readError(res).then(function (m) {
+            throw new Error(m);
+          });
+        return res.json();
+      })
+      .then(function (criada) {
+        // Recarrega a lista no formato do app e cai direto na tela de rastreio.
+        return apiFetch('/api/app/viagens')
+          .then(function (r) {
+            return r.ok ? r.json() : [];
+          })
+          .then(function (viagens) {
+            var v = (viagens || []).find(function (x) {
+              return x.id === criada.id;
+            });
+            if (v) selecionarViagem(v);
+            else loadViagens();
+          });
+      })
+      .catch(function (e) {
+        erro.textContent = e.message || 'Falha ao criar viagem.';
+        erro.hidden = false;
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Criar e iniciar viagem';
       });
   }
 
@@ -474,14 +545,14 @@
   }
 
   function flush() {
-    if (state.flushing || state.buffer.length === 0 || !state.viagem) return;
-    if (state.sessaoExpirada) return; // sem sessão não adianta tentar; buffer preservado
+    if (state.flushing || state.buffer.length === 0 || !state.viagem) return Promise.resolve();
+    if (state.sessaoExpirada) return Promise.resolve(); // sem sessão não adianta; buffer preservado
     state.flushing = true;
 
     var lote = state.buffer.splice(0, state.buffer.length);
     $('m-buffer').textContent = '0';
 
-    apiFetch('/api/app/viagens/' + state.viagem.id + '/posicoes', {
+    return apiFetch('/api/app/viagens/' + state.viagem.id + '/posicoes', {
       method: 'POST',
       body: JSON.stringify({ posicoes: lote }),
     })
@@ -560,6 +631,58 @@
     show('login');
   }
 
+  // Encerra a viagem pelo próprio celular: para o GPS, garante que o último
+  // lote foi entregue e só então fecha a viagem na API.
+  function encerrarViagem() {
+    if (!state.viagem) return;
+    if (!window.confirm('Encerrar esta viagem? Ela sai da lista e vira histórico.')) return;
+    var erro = $('track-erro');
+    erro.hidden = true;
+    var btn = $('btn-encerrar');
+    btn.disabled = true;
+    btn.textContent = 'Encerrando...';
+    if (state.watchId != null) {
+      navigator.geolocation.clearWatch(state.watchId);
+      state.watchId = null;
+    }
+    if (state.flushTimer) {
+      clearInterval(state.flushTimer);
+      state.flushTimer = null;
+    }
+    soltarWakeLock();
+    setTrackingUI(false);
+
+    Promise.resolve(flush()) // último lote sai ANTES de fechar a viagem
+      .then(function () {
+        return apiFetch('/api/app/viagens/' + state.viagem.id + '/encerrar', {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      })
+      .then(function (res) {
+        if (!res.ok)
+          return readError(res).then(function (m) {
+            throw new Error(m);
+          });
+        return res.json();
+      })
+      .then(function () {
+        logLine('viagem encerrada', 'ok');
+        state.viagem = null;
+        state.buffer = [];
+        saveBuffer();
+        loadViagens();
+      })
+      .catch(function (e) {
+        erro.textContent = e.message || 'Falha ao encerrar a viagem.';
+        erro.hidden = false;
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Encerrar viagem';
+      });
+  }
+
   // ---------------------------------------------------------------
   // wiring
   // ---------------------------------------------------------------
@@ -568,6 +691,7 @@
     if (e.key === 'Enter') doLogin();
   });
   $('btn-reload').addEventListener('click', loadViagens);
+  $('btn-nova-viagem').addEventListener('click', criarViagem);
   $('btn-sair').addEventListener('click', sair);
   $('btn-voltar').addEventListener('click', function () {
     if (state.watchId != null) stopTracking();
@@ -575,6 +699,7 @@
   });
   $('btn-start').addEventListener('click', startTracking);
   $('btn-stop').addEventListener('click', stopTracking);
+  $('btn-encerrar').addEventListener('click', encerrarViagem);
 
   // Sessão expirada: toque no status leva ao re-login (buffer preservado).
   $('track-status').addEventListener('click', function () {

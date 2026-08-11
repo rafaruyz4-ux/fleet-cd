@@ -32,10 +32,18 @@
           <button id="btn-reload" class="link">Recarregar</button>
         </div>
         <p class="muted" id="viagens-vazio" hidden>
-          Nenhuma viagem. Crie uma no dashboard e clique em <b>Iniciar</b> (status
-          <b>Em andamento</b>) para poder enviar GPS.
+          Nenhuma viagem ainda. Crie uma nova abaixo e saia dirigindo.
         </p>
         <ul id="lista-viagens" class="lista"></ul>
+
+        <div class="nova-viagem">
+          <h2>Nova viagem</h2>
+          <label for="nv-veiculo">Veículo</label>
+          <select id="nv-veiculo"></select>
+          <button id="btn-nova-viagem" class="primary">Criar e iniciar viagem</button>
+          <p id="nv-erro" class="erro" hidden></p>
+        </div>
+
         <button id="btn-sair" class="link danger">Sair</button>
       </section>
 
@@ -61,6 +69,7 @@
 
         <button id="btn-start" class="primary">Iniciar rastreio</button>
         <button id="btn-stop" class="danger" hidden>Parar rastreio</button>
+        <button id="btn-encerrar" class="danger">Encerrar viagem</button>
 
         <p id="track-erro" class="erro" hidden></p>
         <ul id="log" class="log"></ul>
